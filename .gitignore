@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.test-logs/
+*.egg-info/
+/build/
+/sdk/python/dist/
+
+# Node
+node_modules/
+/console/dist/
+/sdk/typescript/dist/
+*.tgz
+
+# Runtime data: never commit databases, tokens, keys, backups or logs
+/backend/data/
+/data/
+/backups/
+*.db
+*.db-wal
+*.db-shm
+.jarvismind_token
+.control_key
+.env
+*.log
+
+# Local scratch and evidence (kept on the author's machine only)
+/.scratch/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
