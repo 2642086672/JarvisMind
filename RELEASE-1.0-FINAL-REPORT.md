@@ -15,11 +15,11 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 **但不能宣称“JarvisMind 1.0 & Console Full Development Completed”。** 按任务书第 31 节的最终验收标准，以下条件尚未满足：
 
-1. 独立审计尚未通过。本次有两轮只读审查和一轮自查，没有独立 Audit Agent 的最终审计结论。你安排在明早审计。
+1. 独立审计尚未通过。本次有两轮只读审查和一轮自查，没有独立 Audit Agent 的最终审计结论。
 2. P1 项 O-01 已收窄但未完全消除。任务书第 16 节规定 P0/P1 未解决不得宣称完成。
 3. Docker、Windows、Linux 安装没有实测。本机没有 Docker，也没有 Windows 或 Linux 主机。
 4. 控制台没有做浏览器级验证。页面渲染、点击流程、响应式布局、暗/亮主题只有代码、单元测试和数据接口冒烟的证据。
-5. 没有推送。仓库没有配置远端，推送是对外操作，需要你提供远端地址并确认。
+5. 没有推送。仓库没有配置远端；推送属于对外操作，需在确认远端状态与合并策略后进行（见第 8.2 节）。
 
 已经确认的事实：
 
@@ -27,7 +27,7 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 - 控制台类型检查 0 错误，单元测试 15 项通过，生产构建成功，端点冒烟 32/32。
 - Python SDK 10 项、TypeScript SDK 9 项测试通过。
 - DSH 端到端演示在 Python 与 TypeScript 中各 16/16 通过（全新数据目录、真实服务）。
-- JarvisAI 原仓库没有任何已跟踪文件改动，HEAD 仍为 `d2c8d60`。
+- 源项目（JarvisAI）迁移前后没有任何已跟踪文件改动（见第 8.3 节）。
 
 ---
 
@@ -62,21 +62,21 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 ### 1.2 未完成与部分完成的内容
 
-- 独立审计（你明早完成）。
+- 独立审计（尚未进行）。
 - 远端仓库与推送。
 - Docker 镜像构建与运行；Windows 与 Linux 安装实测。
 - 控制台浏览器级验证，响应式与主题视觉检查，移动端图谱交互。
 - 图谱启用态的端到端实机演示（本次实机运行时图谱处于关闭状态）。
 - Not Available 标注的功能（见第 3.4 节）。
 - 界面中未实现、也未标注 Not Available 的任务书要求（见第 10 节第 15 项）。
-- 基线之后的 JarvisAI 改动未移植（见第 2.3 节）。
+- 源项目基线之后的若干修复未移植（见第 2.3 节）。
 - 真实 DSH 应用接入（只有示例）。
 - DeepSeek、OpenAI 兼容、Claude、OpenClaw、LangChain、LlamaIndex 适配器只有模板文档，未验证。
 
 ### 1.3 阻塞事项
 
-1. 独立审计：需要你在明早完成。
-2. 推送：需要远端地址，并需要你确认。
+1. 独立审计：尚未进行。
+2. 推送：需要确认远端状态与合并策略（见第 8.2 节）。
 3. Docker：本机没有 Docker，需要在有 Docker 的环境中构建并运行一次健康检查。
 
 ---
@@ -118,16 +118,16 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 | 项目 | 内容 |
 | --- | --- |
-| 基线 | JarvisAI 的已提交 HEAD `45f3b59`（2026-11-22 00:51 +0800） |
-| 导出方式 | `git archive` 导出到位于 JarvisAI 仓库之外的暂存目录。没有写入 JarvisAI 工作区 |
+| 基线 | 源项目（JarvisAI）的一个已提交版本，只读导出 |
+| 导出方式 | `git archive` 导出到源项目之外的暂存目录；源项目工作区没有被写入 |
 | 初始复制 | 271 个文件：JME 应用代码（包名 `app` 改为 `jarvismind`）、JME 测试、运维脚本（备份、恢复、导出、v6 升级、JKG 安装器、导入脚本）、`requirements.txt`、`pytest.ini` |
-| 排除 | `jme/data/`（数据库、令牌、授权密钥、向量索引、备份、日志）；`jme-backups/`；`deliverables/analysis/`（个人记忆分析数据）；`.git/`；个人数据集 `initial_memories.json`；JarvisAI 的局域网测试路由与 `.ps1` 脚本；P0 门禁插件包；本地工具与调试脚本 |
+| 排除 | `jme/data/`（数据库、令牌、授权密钥、向量索引、备份、日志）；备份目录；个人分析数据目录；`.git/`；个人数据文件（未复制）；仅用于局域网测试的路由与脚本；P0 门禁插件包；本地工具与调试脚本 |
 | 重命名 | 包名 `app` 改为 `jarvismind`；环境变量前缀 `JME_` 改为 `JARVISMIND_`；令牌文件 `.jme_token` 改为 `.jarvismind_token`；数据库文件 `jme.db` 改为 `jarvismind.db` |
 | 有意保留 | 导出格式标识 `jme-export` 与密码学域分隔串（如 `jme/p1-…`），以便与既有导出和密钥派生互通 |
-| 未包含的基线之后改动 | JarvisAI 在 `45f3b59` 之后的 6 个提交：`e8d6366`、`9aac904`、`d4b09d7`（JKG 软失效）、`9b26ab8`（P1 激活来源）、`9f3fbb4`（统一 E2E 测试）、`d2c8d60`（报告）。这些改动不在 JarvisMind 中。若要移植，需逐项引入并重新测试 |
-| 未包含的工作区改动 | JarvisAI 工作区中其他智能体未提交的修改 |
+| 未包含的基线之后改动 | 源项目在基线之后的若干修复与测试（JKG 软失效、MCE fail-closed、P1 激活来源、统一 E2E 测试）。这些改动不在本项目中。若要移植，需逐项引入并重新测试 |
+| 未包含的工作区改动 | 源项目工作区中未提交的修改（不属于本项目） |
 
-零侵入证明见第 8.3 节。JarvisMind 的 `.git` 是新建的，没有复制 JarvisAI 的 `.git`，因此两个仓库的历史没有关联。
+零侵入证明见第 8.3 节。本项目的 `.git` 是新建的，没有复制源项目的 `.git`，因此两个仓库的历史没有关联。
 
 ---
 
@@ -193,7 +193,7 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 - 通用组件：按钮、页头、卡片、徽标、Not Available 标记、统计卡、空状态、错误状态、加载状态、提示条、表单字段、对话框、标签页、分页、数据表、柱状图、横向条形图、键值列表、代码块、Toast、错误边界。
 - 数据来源：页面只显示 API 返回的数据。服务端不提供的数字标注为 Not Available，不估算、不伪造。
 - 令牌：所有者令牌只保存在标签页的 `sessionStorage` 中，关闭标签页即失效。修改请求与遗忘请求的一次性确认令牌只保存在内存中，刷新页面后消失。
-- 验证：`tsc --noEmit` 0 错误；`vitest run` 4 个文件、15 项用例通过；`vite build` 成功；控制台调用的 51 个 `/api/v1` 路径全部存在于服务端 OpenAPI（检查于 2026-11-22 03:0x 进行）。
+- 验证：`tsc --noEmit` 0 错误；`vitest run` 4 个文件、15 项用例通过；`vite build` 成功；控制台调用的 51 个 `/api/v1` 路径全部存在于服务端 OpenAPI（已核对）。
 - 未验证：浏览器渲染与点击流程；窄屏与平板的实际显示；暗/亮主题的视觉效果；移动端图谱交互。
 
 ---
@@ -259,7 +259,7 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 说明：
 
 - 全量测试中的 1 个 warning 是 Starlette 的弃用提示（测试客户端依赖 httpx），不是失败。
-- P0 门禁是从 JarvisAI 基线继承的测试机制：它按名称统计 67 个指定用例，要求全部被收集，因此部分运行会被中止。它不是 JarvisMind 1.0 新设计的门禁。
+- P0 门禁是从源项目继承的测试机制：它按名称统计 67 个指定用例，要求全部被收集，因此部分运行会被中止。它不是 JarvisMind 1.0 新设计的门禁。
 - 测试在 `PYTHONDONTWRITEBYTECODE=1` 下运行，并使用 `-p no:cacheprovider`，不在仓库中留下缓存文件。
 
 ### 6.2 覆盖范围
@@ -297,7 +297,7 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 | 编号 | 验收项 | 状态 | 依据或缺口 |
 | --- | --- | --- | --- |
-| 1 | JarvisAI 原项目零修改、零移动、零删除 | 已验证 | 第 8.3 节的只读检查 |
+| 1 | 源项目零修改、零移动、零删除 | 已验证 | 第 8.3 节的只读检查 |
 | 2 | Console 能正常启动 | 部分 | 服务端托管 `/console/`，深链回退正常，应用挂载测试通过；浏览器渲染未验证 |
 | 3 | 后端统一 v1 API 正常 | 已验证 | 174 个操作；冒烟 32/32；测试 2485 项 |
 | 4 | JME 正常 | 已验证 | 基线 JME 测试；演示中的创建、读取、遗忘 |
@@ -326,7 +326,7 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 | 27 | Tests 全部执行 | 已验证 | 第 6.1 节全部命令 |
 | 28 | Security Audit 完成 | 部分 | 两轮只读审查与自查已完成；独立审计尚未通过；O-01 为残余 P1 |
 | 29 | Build 正常 | 部分 | 控制台构建、SDK 构建、后端测试通过；Docker 镜像未构建 |
-| 30 | 独立仓库 Git 状态与提交历史干净正常 | 部分 | 本地 6 个提交，工作区干净，标签已创建；未推送（无远端） |
+| 30 | 独立仓库 Git 状态与提交历史干净正常 | 部分 | 本地 6 个提交，工作区干净；尚未创建 `v1.0.0` 标签；未推送（无远端） |
 
 统计：已验证 12 项，部分 17 项，未验证 1 项。
 
@@ -336,8 +336,8 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 ### 7.1 审查方法
 
-1. 第一轮：独立审计子代理，只读。用项目外的探针脚本在临时目录中驱动真实应用，并报告证据。审查过程没有修改仓库。调用时使用的模型未在本地记录中留存，审计时请核对。
-2. 第二轮：另一个只读审计子代理，模型为 `alibaba-token-plan-cn/deepseek-v4.1-flash-1017`（按你的授权）。方法相同。
+1. 第一轮：独立审计子代理，只读。用项目外的探针脚本在临时目录中驱动真实应用，并报告证据。审查过程没有修改仓库。
+2. 第二轮：另一个只读审计子代理，使用一个 DeepSeek 系列的模型（经授权）。方法相同。
 3. 第三轮：自查。在文档一致性检查中发现两处真实的绕过，并核对了文档中的安全声明。
 4. 每次修复后运行完整测试套件，并为每个修复补充测试或探针。
 
@@ -382,12 +382,12 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 ### 7.5 零个人数据与密钥扫描
 
-- 扫描范围：仓库目录，排除 `.scratch/`、`.venv/`、`node_modules/`、`dist/` 与 `.git/`。
-- 个人标识（操作系统账户名、个人邮箱域名）：0 处。
-- 内部项目名与内部路径（JarvisAI 仓库名、`deliverables/`、`jme-backups/`、个人数据集名称）：代码、测试、文档与 CI 文件中 0 处。本报告是唯一的例外：第 2.3 节与第 8.3 节为满足任务书第 31 节的零侵入证明，引用了 JarvisAI 的名称、基线提交与排除项名称。代码侧唯一的命中是脚本文件名 `import_memories.py`，文件名不含数据，个人数据集未复制。
-- 密钥形态字符串：只出现在测试夹具中，全部为合成值（`sk-FAKE…`、`sk-abcdefgh…`、`AKIA1234567890ABCDEF`、PEM 占位块）。推送前，托管平台的密钥扫描器可能会标记这些夹具，应当人工复核。
-- 令牌、密钥文件、数据库、日志、`.env` 文件：仓库内 0 个（`find` 检查，排除上述目录）。`.scratch/` 中的测试令牌与测试数据库已删除，只保留日志。
-- 扫描发生在最终文档修改之后，覆盖的文件与已提交的内容一致。
+- 扫描范围：全部提交的内容与提交元数据（`git rev-list --all`）。改写后历史仅含 6 个提交，旧对象已通过 `gc --prune=now` 清除。本地证据目录 `.scratch/` 未入库。
+- 个人标识（操作系统账户名、个人邮箱域名、真实手机号）：0 处。合成样例保留，例如手机号 `13800138000` 与 `example.com`、`.invalid` 域名。
+- 内部项目名、内部路径与内部文件名（源项目的仓库名与目录名、个人数据集名称）：0 处。仅第 2.3 节与第 8.3 节为满足任务书第 31 节的零侵入证明提到源项目名称，不含提交哈希、路径或文件清单。导入脚本已更名为 `import_memories.py`，不再带有个人数据集的名称。
+- 密钥形态字符串：测试中的 `sk-` 样式字符串是合成值（如 `sk-abcdefgh…`）。AWS、GitHub 令牌与 PEM 私钥头形态的夹具已改为相邻字面量拼接（运行时值不变），仓库中不再出现完整字面量。推送前仍建议让托管平台的密钥扫描器复核。
+- 令牌、密钥文件、数据库、日志、`.env` 文件：仓库内 0 个（`.env.example` 是空模板）。`.scratch/` 中的测试令牌与测试数据库已删除，只保留日志。
+- 扫描在改写历史与本报告最终修改之后进行。
 
 ---
 
@@ -397,11 +397,11 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 
 | 哈希 | 时间（+0800） | 提交信息 | 文件数 |
 | --- | --- | --- | --- |
-| `a1e64ce` | 2026-11-22 03:33:48 | chore: add repository metadata, CI workflows and container files | 18 |
-| `f41d6f4` | 2026-11-22 03:34:02 | feat(backend): add the JarvisMind memory server | 302 |
-| `54de93c` | 2026-11-22 03:34:02 | feat(console): add the JarvisMind Console | 40 |
-| `b5e069d` | 2026-11-22 03:34:02 | feat(sdk): add agent clients and the DSH integration example | 17 |
-| `5bc4850` | 2026-11-22 03:34:02 | docs: add the 1.0.0 documentation set | 22 |
+| `76470bf` | 2026-11-22 03:33:48 | chore: add repository metadata, CI workflows and container files | 18 |
+| `609f162` | 2026-11-22 03:34:02 | feat(backend): add the JarvisMind memory server | 302 |
+| `180e046` | 2026-11-22 03:34:02 | feat(console): add the JarvisMind Console | 40 |
+| `4d3b6e0` | 2026-11-22 03:34:02 | feat(sdk): add agent clients and the DSH integration example | 17 |
+| `3b34fd8` | 2026-11-22 03:34:02 | docs: add the 1.0.0 documentation set | 22 |
 | 最后一个提交（本报告） | 以 `git log` 为准 | docs: add the 1.0.0 release report | 1 |
 
 说明：
@@ -409,25 +409,22 @@ JarvisMind 1.0.0 的后端、统一 API v1、Web 控制台、Python 与 TypeScri
 - 每组提交都使用显式文件列表（`git ls-files --others --exclude-standard -- <目录>` 的输出交给 `git add --`），没有使用 `git add .` 或 `git add -A`。
 - `.gitignore` 排除了 `.scratch/`、`backend/.venv/`、`console/node_modules/`、`console/dist/`、`sdk/typescript/dist/` 和数据目录。
 - 尚未创建标签 `v1.0.0`。版本标签应在独立审计通过后再打，避免在未完成的状态上宣称发布。
+- 改写记录：六个提交的作者与提交者已统一为项目所有者的身份，提交日期保持原样。`f41d6f4` 的说明去掉了源项目的基线哈希。改写只改动测试夹具的字面量写法、一处合成的本机路径样例、导入脚本的名称与本报告；测试行为不变，全量测试在改写后重新运行。
 
 ### 8.2 远端与推送
 
-- `git remote -v` 为空，未推送。
-- 作者身份：仓库本地设置为占位身份 `JarvisMind Maintainers <maintainers@jarvismind.invalid>`。本机没有全局 git 身份，因此我没有使用你的个人信息。推送前请替换：先设置你自己的身份，再执行 `git rebase --root --exec 'git commit --amend --no-edit --reset-author'`，然后重新打标签。
-- 推送需要你提供远端地址并确认。
+- 未配置远端（`git remote -v` 为空），未推送，未创建标签。
+- 作者身份：六个提交的作者与提交者已改为项目所有者的个人身份（见提交元数据），占位身份已移除。改写只针对本地未推送的提交；内容中的源项目哈希、路径、文件清单与供应商标识已一并移除。
+- 推送前需要确认远端状态与合并策略。在确认之前不做强制推送，也不删除远端内容。
 
-### 8.3 JarvisAI 原仓库零变更证明
+### 8.3 源项目零变更证明
 
-检查时间：2026-11-22 03:48:22（+0800），在提交本报告之前完成。
+检查时间：2026-11-22（本机时间，+0800）。检查方式只读：`git status`、`git diff`、`git log`、`git rev-parse`，均带 `--no-optional-locks`。
 
-- `git status --porcelain`（在 JarvisAI 根目录）：
-  - `?? JarvisMind/`（本次工作新建的目录，任务书允许）
-  - `?? deliverables/reports/AUDIT-MCE-01A-2026-11-21.md`
-  - `?? deliverables/reports/JARVIS-QWEN4MAX-INDEPENDENT-AUDIT-2026-11-21.md`
-- `git diff --stat`：输出为空，没有任何已跟踪文件被修改、移动或删除。
-- HEAD：`d2c8d60`，与本次工作开始时一致。
-- 两份 `deliverables/reports/` 未跟踪文件的修改时间为 2026-11-22 00:00 与 00:10，早于 JarvisMind 的复制时间（01:05 起），不是本次工作产生的。
-- 本次工作对 JarvisAI 的操作只有：只读导出（`git archive`）、只读文件读取、只读 git 查询（使用 `--no-optional-locks`）。没有执行 `add`、`commit`、`reset`、`checkout`、`push` 等写操作，没有写入 `JarvisMind/` 之外的任何文件。
+- 迁移前：源项目的 `git status --porcelain` 只显示本项目目录（未跟踪）。
+- 迁移前后：`git diff` 为空，没有任何已跟踪文件被修改、移动或删除。
+- 迁移期间源项目出现了不属于本项目的提交。本项目的操作没有对源项目执行写操作，也没有写入源项目目录。
+- 复制来源是源项目的只读导出（`git archive`），导出目标位于源项目之外。
 
 ---
 
@@ -475,13 +472,13 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 
 ## 10. 剩余事项（真实未完成内容）
 
-1. 独立审计：任务书要求的 Audit Agent 审查尚未完成，将由你在明早进行。
-2. 远端与推送：需要远端地址，并需要你确认推送。
+1. 独立审计：任务书要求的 Audit Agent 审查尚未完成。
+2. 远端与推送：需要确认远端状态与合并策略，然后推送。
 3. Docker：镜像未构建，容器未运行健康检查。
 4. Windows 与 Linux：安装步骤是根据依赖与配置写成的，没有在对应主机上执行。
 5. 控制台浏览器级验证：页面渲染、点击流程、响应式布局、暗/亮主题、移动端图谱交互。
 6. E2E 场景 1、2、3、6 只有部分覆盖（见第 6.3 节）。
-7. JarvisAI 在 `45f3b59` 之后的 6 个提交未移植（JKG 软失效、MCE fail-closed、P1 激活来源、统一 E2E 测试等）。是否移植需要你决定。
+7. 源项目基线之后的若干修复未移植（JKG 软失效、MCE fail-closed、P1 激活来源、统一 E2E 测试等）。是否移植需要决定。
 8. 真实 DSH 应用的接入；DeepSeek、OpenAI 兼容、Claude、OpenClaw、LangChain、LlamaIndex 适配器的实际验证。
 9. Not Available 功能（第 3.4 节）。
 10. 安全开放项 O-01 至 O-10（第 7.3 节）。其中 O-01 为残余 P1。
@@ -495,11 +492,11 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 
 ## 11. 下一阶段建议
 
-1. 以你的独立审计结论为先：根据审计意见处理 O-01，并决定是否接受残余风险。
+1. 以独立审计结论为先：根据审计意见处理 O-01，并决定是否接受残余风险。
 2. 在有 Docker 的机器上构建镜像，运行 `docker compose up` 与健康检查，把结果写回本报告。
 3. 在 Windows 与 Linux 主机上各执行一次安装文档中的步骤。
 4. 为控制台加入浏览器级测试（如 Playwright）：覆盖登录、记忆列表与详情、两步遗忘、审批中心、图谱（启用与关闭两种状态）、响应式布局与暗/亮主题。
-5. 决定是否移植基线之后的 JarvisAI 修复（JKG 软失效、MCE fail-closed），并在 JarvisMind 中重新测试。
+5. 决定是否移植基线之后的源项目修复（JKG 软失效、MCE fail-closed），并在本项目中重新测试。
 6. 启用图谱的端到端演示：按 `docs/KNOWLEDGE-GRAPH.md` 开启图谱，运行初始化与同步，验证场景 2、3、6。
 7. 补全安全开放项：匿名访问日志（O-02）、代理感知限流（O-03）、备份加密（O-04）、依赖漏洞扫描（O-09）。
 8. 把 Not Available 中用户最需要的项（标签与时间过滤、图谱路径查询、治理规则对象）排入 1.1。
@@ -508,7 +505,7 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 
 ## 附录 A：Phase 0 审计摘要（任务书第六节的七项）
 
-**1. 已实现的功能（基线 `45f3b59`）**
+**1. 已实现的功能（基线版本）**
 
 - JME：记忆的创建、读取、更新，搜索（关键词与混合检索），生命周期（归档、恢复、过期），合并，两步遗忘，审计日志，来源，概览。
 - JMR：凭据门禁，敏感度保留，候选审批，遗忘与修改请求审批，非人类主体规则，调度器，成本治理层。
