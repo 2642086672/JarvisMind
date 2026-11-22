@@ -98,8 +98,17 @@ class JarvisMindClient:
         message_id: Optional[str] = None,
         turn_id: Optional[str] = None,
         source_id: Optional[str] = None,
+        mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Submit one explicit memory through the governed path.
+
+        ``mode`` is optional and omitted by default, so an existing call sends
+        exactly the bytes it always did. Omit it (or pass ``"auto"``) to keep
+        the server's original behavior: the text must look like a memory
+        request, or the call returns ``NO_INTENT``. Pass ``"direct"`` when you
+        have already decided the statement is worth remembering; it skips only
+        that intent filter. The credential gate, the sensitivity hold and
+        de-duplication still apply in both modes.
 
         ``status`` says what happened: ``SAVED`` or ``UPDATED`` when stored;
         ``CONFLICT`` when it conflicts with an existing memory; ``PROTECTED`` when it
@@ -112,6 +121,7 @@ class JarvisMindClient:
             "message_id": message_id,
             "turn_id": turn_id,
             "source_id": source_id,
+            "mode": mode,
         }
         return self._request("POST", "/api/v1/agent/remember", body=_drop_none(body))["data"]
 

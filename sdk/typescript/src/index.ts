@@ -210,14 +210,28 @@ export class JarvisMindClient {
    * SAVED or UPDATED when stored; CONFLICT when it conflicts with an existing memory;
    * PROTECTED when sensitive and held (nothing is written); DUPLICATE, NO_MEMORY or NO_INTENT when not stored; FAILED when the write did not complete;
    * DENIED when it contains a credential. Credentials are never stored.
+   *
+   * `mode: "auto"` (the default) keeps the original behavior: the text must look
+   * like a memory request, or the call returns NO_INTENT. Use `mode: "direct"`
+   * when you have already decided the statement is worth remembering; it skips
+   * only that intent filter. The credential gate, the sensitivity hold and
+   * de-duplication still apply in both modes.
    */
-  async remember(input: { text: string; conversationId: string; messageId?: string; turnId?: string; sourceId?: string }): Promise<RememberResult> {
+  async remember(input: {
+    text: string;
+    conversationId: string;
+    messageId?: string;
+    turnId?: string;
+    sourceId?: string;
+    mode?: "auto" | "direct";
+  }): Promise<RememberResult> {
     const body = {
       text: input.text,
       conversation_id: input.conversationId,
       message_id: input.messageId,
       turn_id: input.turnId,
       source_id: input.sourceId,
+      mode: input.mode,
     };
     return (await this.request<{ data: RememberResult }>("POST", "/api/v1/agent/remember", { body })).data;
   }
