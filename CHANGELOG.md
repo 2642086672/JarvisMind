@@ -8,6 +8,20 @@ All notable changes to JarvisMind are recorded here. The format follows
 
 ### Added
 
+- **AI-decided memory and a companion style (DSH plugin).** `rememberMode` (`agent` by default, or `auto` / `both`)
+  decides which mechanism selects memories: under `agent` the model calls `jarvismind_remember` in its own
+  judgement instead of every turn being submitted, which stops greetings and one-line acknowledgements from being
+  stored. `memoryStyle` (`assistant` by default, or `companion`) sets what the model is steered to notice — a
+  companion brief adds shared references, significant dates, emotional turns and standing agreements, and asks for
+  them to be recorded silently. The tool sends `mode: "direct"` so an AI-decided statement is written rather than
+  refused for lacking a trigger word; the credential gate, sensitivity hold and de-duplication still run.
+- **The knowledge graph works on a fresh install.** `python -m jarvismind init-db` and new-space provisioning now
+  install `jkg_nodes`, `jkg_edges` and `jkg_edge_sources` and set `jkg.enabled` to `'1'` inside the database-creation
+  transaction, so `GET /api/v1/jkg/status` reports `ready` and `/console/graph` works on first launch instead of
+  reporting `jkg_schema_not_ready`. The installer is passed into `create_fresh_database` from the JKG package, so the
+  database layer still does not import the graph, and `JARVISMIND_JKG_ENABLED=0` still overrides the stored default.
+- **`mode` on the SDKs.** `remember()` in `sdk/python` and `sdk/typescript` accepts an optional `mode` and forwards
+  it, without changing existing call signatures.
 - **Soul continuity core anchor (DSH plugin).** The plugin now injects a `<jarvismind-core-anchor>` block on every
   step, ahead of the per-turn recall, holding the user's `PROFILE` memories — name, form of address, core
   preferences and standing agreements — so the relationship survives context compaction and new sessions. It
@@ -26,6 +40,11 @@ All notable changes to JarvisMind are recorded here. The format follows
 - **`setup_agent.py` on a fresh install.** The script creates missing parent directories for `--out` with
   mode `0700` and writes the token with mode `0600`, so `--out ~/.jarvismind/dsh-agent.token` no longer fails
   with `ENOENT` when `~/.jarvismind` does not exist yet.
+- **A pleasantry is no longer stored as a memory.** With `mode: "direct"` there is no intent heuristic, so
+  "谢谢" or "好的" could be written. A whole-message pleasantry and anything under two characters are now refused in
+  both modes. The check is on the whole message, so "谢谢，我叫年糕" is still stored.
+- **A `jmt_...` token is refused as memory content.** A statement containing a JarvisMind agent token was accepted in
+  both modes; the credential gate did not recognise the token format the server itself issues.
 
 ## [1.0.0] - 2026-11-22
 

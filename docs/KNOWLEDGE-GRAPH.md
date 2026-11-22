@@ -31,9 +31,20 @@ reads.
 
 The graph has three parts that must be in place before it returns anything: the tables, the switch and the first build.
 
-### 1. Install the tables
+### 0. A new database already has it
 
-The installer is `scripts/upgrade_to_jkg.py`. It is fail-closed and written to be run by an operator.
+If the database was created by `python -m jarvismind init-db`, or by provisioning a new memory space, skip to step 3.
+Those two paths install the tables and set `jkg.enabled` to `'1'` inside the creation transaction, so a fresh install
+reports `ready` and `/console/graph` works on first launch.
+
+This changes nothing about the authority model: the tables are empty, the graph is still a derived projection of JME,
+and `JARVISMIND_JKG_ENABLED=0` still overrides the stored default. Only a brand-new database gets this; an existing one is
+never touched by `init-db`, which refuses to run against it, and is upgraded through the installer below.
+
+### 1. Install the tables (existing databases)
+
+The installer is `scripts/upgrade_to_jkg.py`. It is fail-closed and written to be run by an operator. It is the only path
+for a database that already exists.
 
 ```bash
 cd backend

@@ -308,15 +308,32 @@ extra request, and it is cleared when the plugin unloads.
 
 It is read-only. When the user states a naming preference, a standing agreement,
 a core preference, or an important date, the `jarvismind_remember` tool
-description steers the model to record it through `/api/v1/agent/remember`, where
-JMR still decides whether it is stored.
+description steers the model to record it through `/api/v1/agent/remember`. With
+`rememberMode: agent` — the default — the model decides when that happens, which
+is what filters out greetings and one-line acknowledgements; with `auto` the
+turn-level capture submits every turn instead. In either case JMR applies the
+same governance before anything is stored.
+
+`memoryStyle` sets what the model is steered to notice. `assistant` (the default)
+focuses on preferences, decisions, habits and dates. `companion` adds shared
+jokes and private references, significant events and when they happened,
+emotional turns, and what the two of you agreed to — and tells the model to
+record them silently, without announcing the save, so the moment is not broken.
+Both styles forbid credentials.
+
+A statement the model submits is written immediately rather than refused for
+lacking a trigger word, because the tool sends `mode: "direct"`. That skips only
+the server's intent heuristics; the credential gate, the sensitivity hold and
+de-duplication all still run, and a message that is purely a pleasantry is still
+rejected.
 
 What the plugin **cannot** do: DSH 0.2.0-rc.2 has compaction events
 (`compaction/start`, `compaction/summary`, `compaction/end`, `compaction/prune`)
 but no cancellable before-compaction hook, so a plugin cannot veto or delay
 compaction. On `compaction/start` the plugin flushes any statement still queued
-for remember as a best effort; continuity afterwards rests on the anchor and on
-the per-turn capture. See
+for remember as a best effort — work that only exists in `auto` or `both` mode —
+and continuity afterwards rests on the anchor and on what the model recorded
+before the turn ended. See
 [`CONTRACT.md`](../../plugins/dsh-jarvismind/CONTRACT.md#context-compaction) for
 the probe evidence.
 

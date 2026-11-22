@@ -111,6 +111,8 @@ by targeting the row id `jarvismind` with a complete `config` object:
     autoRecall: true
     recallLimit: 6
     autoRemember: true
+    rememberMode: agent
+    memoryStyle: assistant
     coreAnchorEnabled: true
     coreAnchorLimit: 6
     coreAnchorMaxChars: 500
@@ -124,7 +126,9 @@ by targeting the row id `jarvismind` with a complete `config` object:
 | `tokenEnv` | `JARVISMIND_AGENT_TOKEN` | Environment variable read first; it wins over the file. |
 | `autoRecall` | `true` | Inject recalled memory into the system prompt. |
 | `recallLimit` | `6` | Memories requested per recall, clamped to 1–20. |
-| `autoRemember` | `true` | Submit user statements after each turn. |
+| `autoRemember` | `true` | Submit user statements after each turn (only meaningful in `auto` mode). |
+| `rememberMode` | `agent` | How memories are selected: `agent`, `auto` or `both`. See below. |
+| `memoryStyle` | `assistant` | What the model is told is worth remembering: `assistant` or `companion`. |
 | `coreAnchorEnabled` | `true` | Inject the always-on `<jarvismind-core-anchor>` block. |
 | `coreAnchorLimit` | `6` | Memories kept in the anchor, clamped to 1–12. |
 | `coreAnchorMaxChars` | `500` | Characters kept per anchor memory, clamped to 100–2000. |
@@ -133,6 +137,41 @@ by targeting the row id `jarvismind` with a complete `config` object:
 The token is read at request time, so rotating the file or the environment
 variable takes effect without reinstalling the plugin. The token is never
 logged, printed, or returned in a tool result.
+
+### Who decides what is worth remembering
+
+`rememberMode` controls which mechanism selects memories:
+
+| Value | Behavior |
+| --- | --- |
+| `agent` (default) | The model calls `jarvismind_remember` when something matters. Nothing is captured automatically. |
+| `auto` | Every user turn is submitted after `turn/end`. No tool guidance is injected. |
+| `both` | Both paths run. The model may add what the turn-level capture would miss. |
+
+The default changed from blind per-turn capture to the model's own judgement,
+because the turn-level path filed greetings and one-line acknowledgements as
+memories. Under `agent`, the tool's statement is sent with `mode: "direct"`: the
+model has already decided, so the server's trigger-word heuristic is skipped and
+the memory is written immediately. The server still runs the full governance
+chain first — credential gate, sensitivity hold, de-duplication and the single
+authoritative write — so `direct` is a different way to address a write, not a
+privileged one. It is also not an authentication shortcut.
+
+`memoryStyle` decides what the model is told to look for:
+
+| Value | Guidance |
+| --- | --- |
+| `assistant` (default) | Working preferences, project decisions, constraints, habits and dates. |
+| `companion` | Form of address, shared history, inside references, emotional beats and standing agreements. It is told to record silently and never narrate the save, so the moment is not broken by "I have saved this". |
+
+Both styles forbid credentials, and the brief is only injected in `agent` or
+`both` mode: in `auto` mode the turn-level capture already covers every turn, so
+advising the model to call the tool would only submit the same statement twice.
+
+Even in `direct` mode the server refuses statements that carry no fact. A message
+that is purely a pleasantry ("谢谢", "好的", "收到", "thanks") is rejected, and
+so is anything under two characters. The check is on the whole message, so
+"谢谢，我叫年糕" is still stored.
 
 ## Soul continuity across compaction
 
@@ -165,7 +204,9 @@ request and sees a byte-identical anchor throughout.
 Writes are unaffected: the anchor is read-only. When the user expresses a naming
 preference, a standing agreement, a core preference, or an important date, the
 `jarvismind_remember` tool description steers the model to record it through
-`POST /api/v1/agent/remember`, where JMR still decides whether it is stored.
+`POST /api/v1/agent/remember`. With `rememberMode: agent` (the default) the model
+decides when that happens; with `auto` the turn-level capture submits every turn
+instead. Either way JMR applies the same governance before anything is stored.
 
 ### The pre-compaction hook that does not exist
 
@@ -179,9 +220,10 @@ cannot block or delay compaction.
 So the plugin does the only honest thing: on `compaction/start` it flushes any
 statement still queued for `/api/v1/agent/remember` as a fire-and-forget best
 effort, to shrink the window in which an un-sent statement would be summarised
-away. It does **not** claim a guarantee it cannot keep. Continuity after
-compaction rests on the always-present `<jarvismind-core-anchor>` and on the
-per-turn `turn/end` capture.
+away. That flush only has work to do in `auto` or `both` mode, since `agent` mode
+never queues a turn. It does **not** claim a guarantee it cannot keep. Continuity
+after compaction rests on the always-present `<jarvismind-core-anchor>` and on the
+memory the model chose to record before the turn ended.
 
 ## Verify in two minutes
 

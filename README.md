@@ -96,6 +96,9 @@ SDKs: [Python](sdk/python/README.md) and [TypeScript](sdk/typescript/README.md).
 in [docs/tutorials/INTEGRATE-WITH-DSH.md](docs/tutorials/INTEGRATE-WITH-DSH.md). For DSH Desktop the same
 hooks are available as a native plugin: [plugins/dsh-jarvismind](plugins/dsh-jarvismind/README.md).
 
+A fresh `init-db` also ships the [knowledge graph](docs/KNOWLEDGE-GRAPH.md) ready to use, so the console's graph
+view works on first launch.
+
 ## What this release has been verified against
 
 | Area | Result in the release environment |

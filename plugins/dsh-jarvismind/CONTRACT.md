@@ -117,6 +117,33 @@ it uses the same documented agent surface as the tools:
   flow into prompt assembly automatically.
 - Tool execution context exposes `exec.signal` and `exec.agent` (the live Agent,
   including `exec.agent.session.id`).
+- A tool description is part of the prompt, not just UI text: the wording of
+  `jarvismind_remember` is what steers the model to record a form of address, a
+  standing agreement or a shared reference. That description, plus the
+  `memoryStyle` brief injected by this plugin, is the entire mechanism behind
+  `rememberMode: agent`.
+
+### Writing through the agent API
+
+`POST /api/v1/agent/remember` accepts an optional `mode`:
+
+- `auto` (the server default when `mode` is omitted) applies the server's own
+  intent heuristics, so a statement that does not read like a memory request is
+  refused with `NO_INTENT`.
+- `direct` skips those heuristics. The plugin sends it from the
+  `jarvismind_remember` tool because the model has already made the decision.
+
+`direct` changes *which* heuristic runs first, never the governance chain. The
+credential gate, the JMR sensitivity hold, de-duplication and the single
+authoritative write all still run; a credential is still refused, a sensitive
+personal fact still waits for approval, and a duplicate is still dropped.
+Nothing about authentication changes either.
+
+Because `direct` does not judge whether a statement is worth keeping, the plugin
+only sends what the model chose to send, and the server still refuses a message
+that carries no fact at all: a whole-message pleasantry (`谢谢`, `好的`, `收到`,
+`thanks`) or anything under two characters is rejected. The check is on the
+whole message, so `谢谢，我叫年糕` is stored.
 
 ### Scoping and cleanup
 

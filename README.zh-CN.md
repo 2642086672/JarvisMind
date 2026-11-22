@@ -79,6 +79,8 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 
 SDK：[Python](sdk/python/README.md) 与 [TypeScript](sdk/typescript/README.md)。完整 DSH 演练见 [docs/tutorials/INTEGRATE-WITH-DSH.md](docs/tutorials/INTEGRATE-WITH-DSH.md)。DSH Desktop 可直接使用原生插件：[plugins/dsh-jarvismind](plugins/dsh-jarvismind/README.md)。
 
+全新 `init-db` 会同时建好[知识图谱](docs/KNOWLEDGE-GRAPH.md)，控制台的图谱视图首次启动即可使用。
+
 ## 本发布已验证的内容
 
 | 领域 | 发布环境中的结果 |
