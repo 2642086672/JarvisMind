@@ -21,7 +21,8 @@ correct all of it.
 - **Console.** The owner's browser console: memories, graph, governance, spaces, agents, operations,
   API management, backups, settings.
 - **API v1 and SDKs.** A versioned `/api/v1` surface for agents, with Python and TypeScript clients.
-- **DSH example.** A runnable integration with a cross-session demo.
+- **DSH example and native plugin.** A runnable integration with a cross-session demo, plus a Cordis
+  plugin (`plugins/dsh-jarvismind/`) that wires recall and capture into DSH Desktop automatically.
 
 ## Architecture
 
@@ -92,7 +93,8 @@ Step-by-step guides: [Installation](docs/INSTALLATION.md), [Configuration](docs/
 4. Forgetting is two-step and the owner decides it. See [docs/AGENT-INTEGRATION.md](docs/AGENT-INTEGRATION.md).
 
 SDKs: [Python](sdk/python/README.md) and [TypeScript](sdk/typescript/README.md). The full DSH walk-through is
-in [docs/tutorials/INTEGRATE-WITH-DSH.md](docs/tutorials/INTEGRATE-WITH-DSH.md).
+in [docs/tutorials/INTEGRATE-WITH-DSH.md](docs/tutorials/INTEGRATE-WITH-DSH.md). For DSH Desktop the same
+hooks are available as a native plugin: [plugins/dsh-jarvismind](plugins/dsh-jarvismind/README.md).
 
 ## What this release has been verified against
 

@@ -13,7 +13,7 @@ JarvisMind 是一个开放、可自托管的 **AI 系统统一记忆基础设施
 - **上下文引擎（MCE）。** 检索相关记忆并构建上下文块。上下文块被标记为不可信数据，模型只能把它当作参考材料，而不是指令。
 - **控制台。** 所有者的浏览器控制台：记忆、图谱、治理、空间、智能体、运维、API 管理、备份、设置。
 - **API v1 与 SDK。** 面向智能体的版本化 `/api/v1` 接口，提供 Python 与 TypeScript 客户端。
-- **DSH 示例。** 一个可运行的集成示例，含跨会话演示。
+- **DSH 示例与原生插件。** 一个可运行的集成示例，含跨会话演示；另有 Cordis 插件（`plugins/dsh-jarvismind/`）自动接入 DSH Desktop 的召回与捕获。
 
 ## 架构
 
@@ -77,7 +77,7 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 3. 一轮对话之后调用 `POST /api/v1/agent/remember`，由 JMR 决定存储什么。
 4. 遗忘是两步流程，由所有者决定。见 [docs/AGENT-INTEGRATION.md](docs/AGENT-INTEGRATION.md)。
 
-SDK：[Python](sdk/python/README.md) 与 [TypeScript](sdk/typescript/README.md)。完整 DSH 演练见 [docs/tutorials/INTEGRATE-WITH-DSH.md](docs/tutorials/INTEGRATE-WITH-DSH.md)。
+SDK：[Python](sdk/python/README.md) 与 [TypeScript](sdk/typescript/README.md)。完整 DSH 演练见 [docs/tutorials/INTEGRATE-WITH-DSH.md](docs/tutorials/INTEGRATE-WITH-DSH.md)。DSH Desktop 可直接使用原生插件：[plugins/dsh-jarvismind](plugins/dsh-jarvismind/README.md)。
 
 ## 本发布已验证的内容
 

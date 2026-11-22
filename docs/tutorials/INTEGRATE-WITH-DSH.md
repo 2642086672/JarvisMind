@@ -7,7 +7,8 @@ This tutorial connects a chat application, DSH, to JarvisMind so that DSH rememb
 3. the pre-chat hook: retrieving context and placing it safely in the system prompt;
 4. the post-chat hook: submitting what the user said, without blocking the reply;
 5. managing and forgetting memories in the console, and checking that DSH stops using them;
-6. running the end-to-end demo that shows continuity from session A to session B.
+6. running the end-to-end demo that shows continuity from session A to session B;
+7. installing and verifying the native DSH Desktop Cordis plugin that automates these hooks (section 8).
 
 The code is in `examples/dsh-integration/`. The steps assume you are in the repository root.
 
@@ -48,7 +49,8 @@ python examples/dsh-integration/python/setup_agent.py \
   --out ~/.jarvismind/dsh-agent.token
 ```
 
-The script creates the agent with the permissions above and issues a token. It uses the default space, so grant more
+The script creates the agent with the permissions above and issues a token. It creates missing parent directories with
+mode `0700`, writes the token with mode `0600`, and never prints it. It uses the default space, so grant more
 spaces in the console if you need them.
 
 ## 3. The pre-chat hook: retrieve context
@@ -194,9 +196,133 @@ release build on a local server. The run used a scratch data directory.
 - If the owner revokes DSH's token, DSH keeps answering without memory: its calls fail open.
 - Back up the spaces DSH uses ([BACKUP.md](../BACKUP.md)).
 
+## 8. Native DSH Desktop plugin (automatic hooks + tools)
+
+Sections 3 and 4 show the hook pattern. DSH Desktop can run it as a native Cordis
+plugin, without any per-conversation glue: `plugins/dsh-jarvismind/` implements
+automatic recall, automatic capture, and the three `jarvismind_*` agent tools.
+
+It is verified against DSH Desktop **0.2.0-rc.2** (Cordis 4.0.4). The plugin uses
+the real Desktop APIs: `agent/inbox/claimed`, the scoped
+`system-prompt/assemble` waterfall, `session/event` → `turn/end`, and
+`ctx.tools.register()`. It keeps no memory of its own; all reads and writes go
+through `/api/v1/agent/*`.
+
+### Install
+
+1. Create the agent token if you have not already:
+
+   ```bash
+   python examples/dsh-integration/python/setup_agent.py \
+     --owner-token-file backend/data/.jarvismind_token \
+     --out ~/.jarvismind/dsh-agent.token
+   ```
+
+2. Build the plugin:
+
+   ```bash
+   cd plugins/dsh-jarvismind
+   npm install
+   npm run build
+   npm test
+   cd -
+   ```
+
+3. In DSH Desktop, open **Plugins → Add plugin** and enter the absolute path to
+   `plugins/dsh-jarvismind/` (or to a `.tgz` produced by `npm pack
+   --pack-destination /tmp`). Confirm, then enable the **JarvisMind Memory**
+   bundle. A first install can activate through HMR; replacing an installed copy
+   may need one quit/reopen. Alternatively, quit DSH Desktop and use the CLI
+   method that follows.
+
+**CLI install (method 2).** Quit DSH Desktop first (`⌘Q`), then install with the
+`plugin` subcommand. This does not boot the Desktop profile; it only runs pnpm
+against the profile directory and selects the bundle:
+
+```bash
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
+  plugin --profile desktop add /Users/<you>/JarvisMind/plugins/dsh-jarvismind
+```
+
+Reopen DSH Desktop afterwards. This was verified on 0.2.0-rc.2 in a disposable
+copy of the Desktop profile: the command added the `link:` dependency and
+appended `dsh-plugin-jarvismind` to `dsh.profile.bundles`.
+
+**Do not use the launcher form** `dsh --profile desktop plugin add <path>`. It
+tries to boot the reserved Desktop profile and exits with:
+
+```text
+error: profile "desktop" is managed exclusively by the Electron application
+```
+
+The same `dsh plugin --profile <name> add <path>` command also works for
+non-Desktop profiles.
+
+### Verify
+
+1. In **session A**, state a durable preference.
+2. Open a genuinely **new session B** and ask about it. The answer should use the
+   memory; the model may also call `jarvismind_search`.
+3. Open `http://127.0.0.1:8777/console/memories` to see and manage the captured
+   memory in real time.
+4. Ask the model to forget it. `jarvismind_forget` only creates a `PENDING`
+   two-step request; approve it in **治理中心**. The memory is unchanged until
+   the owner approves.
+
+### Configuration
+
+The bundle row id is `jarvismind`. Defaults: `baseUrl`
+`http://127.0.0.1:8777`, `tokenFile` `~/.jarvismind/dsh-agent.token`,
+`tokenEnv` `JARVISMIND_AGENT_TOKEN` (wins over the file), `autoRecall` `true`,
+`recallLimit` `6`, `autoRemember` `true`, `coreAnchorEnabled` `true`,
+`coreAnchorLimit` `6`, `coreAnchorMaxChars` `500`, `timeoutMs` `2500`. Override
+them in the Desktop profile's `cordis.patch.yml`; see
+[`plugins/dsh-jarvismind/README.md`](../../plugins/dsh-jarvismind/README.md#3-configure-optional).
+
+Recall and capture are fail-open: a stopped, slow, or failing JarvisMind server
+never blocks or breaks a DSH reply. The injected block is marked as read-only,
+untrusted data and the plugin rejects malformed wrappers, so memory text cannot
+act as instructions or close the wrapper early.
+
+### Keeping the relationship across compaction
+
+DSH compacts a long conversation: earlier messages are replaced by a summary, and a
+new session starts with no history at all. Either one would otherwise erase the
+user's name, the established tone, and the private agreements that make a
+long-running companion feel continuous.
+
+The plugin injects a `<jarvismind-core-anchor>` block on **every** step, ahead of
+the per-turn `<jarvismind-context>`. It holds the agent's most defining active
+memories, ranked `PROFILE` first (who the user is and how they want to be
+addressed), then `SEMANTIC`, `EPISODIC`, `REFLECTION`, `PROJECT` — never `WORKING`
+scratch state. Each entry is truncated to `coreAnchorMaxChars` and the list to
+`coreAnchorLimit`, so the anchor cannot crowd out the rest of the window. A memory
+already supplied by that turn's recall is dropped from the anchor rather than
+rendered twice.
+
+The block carries the same read-only, untrusted-data declaration as the recall
+block, plus an instruction to keep the established form of address, tone and
+familiarity — so after a compaction the model does not treat the user as a
+stranger. It is cached for 30 s in memory, so a multi-step turn costs at most one
+extra request, and it is cleared when the plugin unloads.
+
+It is read-only. When the user states a naming preference, a standing agreement,
+a core preference, or an important date, the `jarvismind_remember` tool
+description steers the model to record it through `/api/v1/agent/remember`, where
+JMR still decides whether it is stored.
+
+What the plugin **cannot** do: DSH 0.2.0-rc.2 has compaction events
+(`compaction/start`, `compaction/summary`, `compaction/end`, `compaction/prune`)
+but no cancellable before-compaction hook, so a plugin cannot veto or delay
+compaction. On `compaction/start` the plugin flushes any statement still queued
+for remember as a best effort; continuity afterwards rests on the anchor and on
+the per-turn capture. See
+[`CONTRACT.md`](../../plugins/dsh-jarvismind/CONTRACT.md#context-compaction) for
+the probe evidence.
+
 ## What this tutorial does not cover
 
-- It does not connect to any particular DSH build. The hooks are the pattern; DSH's own code decides where they go.
+- The native plugin in section 8 targets DSH Desktop 0.2.0-rc.2. Other DSH builds may expose the hooks under different names; the pattern in sections 3 and 4 still applies.
 - It does not test every model vendor. See [AGENT-INTEGRATION.md](../AGENT-INTEGRATION.md#adapters).
 - It does not cover multi-user DSH deployments with separate spaces per user. The pattern is the same: one space per user,
   each granted to the same agent.

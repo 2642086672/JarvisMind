@@ -1,0 +1,42 @@
+{
+  "name": "dsh-plugin-jarvismind",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native DeepSeek Harness (Cordis) plugin: automatic cross-session memory recall, turn capture, and JarvisMind tools for a local JarvisMind 1.0 server.",
+  "license": "MIT",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "CONTRACT.md",
+    "scripts/smoke-dsh.mjs"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "pack:check": "npm pack --dry-run",
+    "smoke:dsh": "node scripts/smoke-dsh.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  }
+}

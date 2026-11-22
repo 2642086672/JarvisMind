@@ -4,6 +4,29 @@ All notable changes to JarvisMind are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Soul continuity core anchor (DSH plugin).** The plugin now injects a `<jarvismind-core-anchor>` block on every
+  step, ahead of the per-turn recall, holding the user's `PROFILE` memories — name, form of address, core
+  preferences and standing agreements — so the relationship survives context compaction and new sessions. It
+  reads `GET /api/v1/agent/memories`, ranks locally, truncates each entry, de-duplicates against the recall
+  block, falls back to caching for 30 s in memory, and fails open. New options `coreAnchorEnabled`,
+  `coreAnchorLimit` (1–12) and `coreAnchorMaxChars` (100–2000).
+- **Native DSH Desktop plugin.** `plugins/dsh-jarvismind/` is a Cordis Host plugin for DSH Desktop 0.2.0-rc.2
+  that automates the integration: recall before the reply via `POST /api/v1/agent/context`, asynchronous
+  capture after `turn/end` via `POST /api/v1/agent/remember`, and the `jarvismind_search`,
+  `jarvismind_remember` and `jarvismind_forget` tools. It keeps no memory of its own and fails open.
+  See [the plugin README](plugins/dsh-jarvismind/README.md) and
+  [section 8 of the DSH tutorial](docs/tutorials/INTEGRATE-WITH-DSH.md#8-native-dsh-desktop-plugin-automatic-hooks--tools).
+
+### Fixed
+
+- **`setup_agent.py` on a fresh install.** The script creates missing parent directories for `--out` with
+  mode `0700` and writes the token with mode `0600`, so `--out ~/.jarvismind/dsh-agent.token` no longer fails
+  with `ENOENT` when `~/.jarvismind` does not exist yet.
+
 ## [1.0.0] - 2026-11-22
 
 First release of the unified memory infrastructure.

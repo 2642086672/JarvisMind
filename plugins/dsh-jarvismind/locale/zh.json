@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "JarvisMind 记忆",
+    "description": "通过本地 JarvisMind 服务实现跨会话自动记忆召回与捕获，并提供每轮常驻的核心锚点，在上下文压缩或新开会话后仍保住称呼、语气与相处约定；另含显式的记忆搜索、记住与遗忘工具。"
+  },
+  "config": {
+    "coreAnchorEnabled": {
+      "title": "核心锚点",
+      "description": "注入每轮常驻的 <jarvismind-core-anchor> 锚点，让用户的称呼、语气偏好、核心偏好与长期相处约定在上下文压缩或新开会话后依然保留。"
+    },
+    "coreAnchorLimit": {
+      "title": "核心锚点条数",
+      "description": "核心锚点保留的记忆条数，范围 1 到 12。条数越多关系越完整，但占用的上下文也越多。"
+    },
+    "coreAnchorMaxChars": {
+      "title": "核心锚点单条字数",
+      "description": "核心锚点中每条记忆保留的最大字符数，范围 100 到 2000。超长内容按条截断，而不是整条丢弃。"
+    }
+  }
+}

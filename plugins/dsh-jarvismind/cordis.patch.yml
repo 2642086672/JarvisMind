@@ -1,0 +1,14 @@
+# JarvisMind memory bridge for the DSH Desktop profile.
+#
+# The bundle inserts one Host plugin row into the composed profile. The plugin
+# keeps no memory of its own: recall, capture and the three agent tools all go
+# through the JarvisMind agent API at `baseUrl`.
+#
+# Every value below is optional; the plugin's Config schema supplies the
+# defaults shown in README.md. A user patch layer can override any field by
+# addressing this row id (`jarvismind`) with a complete `config` object.
+
+- insert:
+    - id: jarvismind
+      name: dsh-plugin-jarvismind
+      config: {}

@@ -10,6 +10,7 @@ console/          Browser console (React, TypeScript, Vite)
 sdk/python/       Python agent client (jarvismind_sdk)
 sdk/typescript/   TypeScript agent client (@jarvismind/sdk)
 examples/         DSH integration: hooks, setup script, demos
+plugins/          DSH Desktop Cordis plugins (dsh-jarvismind: native recall + capture)
 docs/             Documentation (this folder)
 docker/           Container entrypoint
 .github/          CI workflows and templates

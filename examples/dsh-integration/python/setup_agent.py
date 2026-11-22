@@ -4,7 +4,9 @@ Usage:
     python setup_agent.py --owner-token-file ~/.jarvismind/owner.token --out ~/.jarvismind/dsh-agent.token
 
 The agent token is written to --out with owner-only permissions and is never printed.
-Run this once per installation: each run creates a new agent.
+Missing parent directories are created with mode 0700, so a fresh install can write
+``~/.jarvismind/dsh-agent.token`` directly. Run this once per installation: each run
+creates a new agent.
 """
 from __future__ import annotations
 
@@ -19,6 +21,32 @@ import urllib.request
 # Least privilege for a chat application: read, search and context, plus governed writes
 # (remember) and governed forget requests. Sensitive access and graph access are not granted.
 AGENT_PERMISSIONS = ["read", "search", "context", "write", "delete"]
+PRIVATE_DIR_MODE = 0o700
+PRIVATE_FILE_MODE = 0o600
+
+
+def _ensure_private_parent(target: pathlib.Path) -> None:
+    """Create the token's parent directories, keeping newly created ones private.
+
+    ``os.open`` cannot create missing parents, so a fresh install with
+    ``--out ~/.jarvismind/dsh-agent.token`` used to fail with ENOENT. Every
+    directory this helper creates is chmodded to 0700 (mkdir's mode is masked
+    by the process umask); pre-existing directories are left untouched.
+    """
+    parent = target.parent
+    missing = []
+    probe = parent
+    while not probe.exists() and probe != probe.parent:
+        missing.append(probe)
+        probe = probe.parent
+
+    parent.mkdir(parents=True, exist_ok=True)
+    for directory in missing:
+        try:
+            os.chmod(directory, PRIVATE_DIR_MODE)
+        except OSError:
+            # "Best effort": a filesystem without POSIX modes must not block setup.
+            pass
 
 
 def _owner_call(base_url: str, owner_token: str, method: str, path: str, body=None) -> dict:
@@ -66,7 +94,12 @@ def main() -> int:
     )
 
     out = pathlib.Path(args.out).expanduser()
-    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    _ensure_private_parent(out)
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, PRIVATE_FILE_MODE)
+    try:
+        os.fchmod(fd, PRIVATE_FILE_MODE)
+    except OSError:
+        pass
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(issued["token"])
     print(f"agent {agent['id']} created with permissions: {', '.join(AGENT_PERMISSIONS)}")

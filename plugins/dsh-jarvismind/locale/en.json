@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "JarvisMind Memory",
+    "description": "Automatic cross-session memory recall and capture, an always-on core anchor that preserves the user's name, tone and standing agreements across context compaction, plus explicit search, remember and forget tools, backed by a local JarvisMind server."
+  },
+  "config": {
+    "coreAnchorEnabled": {
+      "title": "Core anchor",
+      "description": "Inject the always-on <jarvismind-core-anchor> block so the user's name, form of address, core preferences and standing agreements survive context compaction and new sessions."
+    },
+    "coreAnchorLimit": {
+      "title": "Core anchor memories",
+      "description": "How many memories the core anchor keeps, from 1 to 12. Higher values preserve more of the relationship at the cost of prompt space."
+    },
+    "coreAnchorMaxChars": {
+      "title": "Core anchor characters per memory",
+      "description": "Maximum characters kept for each memory in the core anchor, from 100 to 2000. Long memories are truncated rather than dropped."
+    }
+  }
+}
