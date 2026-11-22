@@ -12,7 +12,7 @@ permission. Forgotten and merged memories are never returned to any agent.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -109,6 +109,12 @@ class RememberIn(BaseModel):
     message_id: Optional[str] = Field(default=None, max_length=128)
     turn_id: Optional[str] = Field(default=None, max_length=255)
     source_id: Optional[str] = Field(default=None, max_length=128)
+    # ``auto`` keeps the original behavior: a statement must look like a memory
+    # request before it is considered. ``direct`` is for a caller that has
+    # *already* decided the statement is worth remembering (the DSH agent after
+    # it judges a turn); it skips only the intent-word filter. The credential
+    # gate, the JMR sensitivity hold and de-duplication all still run.
+    mode: Literal["auto", "direct"] = "auto"
 
 
 class RecallIn(BaseModel):
@@ -157,6 +163,7 @@ def remember(payload: RememberIn, container: Container = Depends(get_container))
         message_id=payload.message_id,
         turn_id=payload.turn_id,
         source_id=payload.source_id,
+        mode=payload.mode,
     )
     return {"data": _dump(result)}
 

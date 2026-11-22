@@ -17,6 +17,11 @@ _RULES: tuple = (
     ("private_key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----")),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
     ("openai_key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
+    # JarvisMind's own agent/owner token: ``jmt_<8 hex public id>_<urlsafe secret>``.
+    # Only the FULL form is a credential. The public prefix alone (``jmt_c0f26d38``)
+    # is shown in listings by design, so it must keep passing: this rule requires
+    # the ``_`` separator and a secret of at least 20 characters after it.
+    ("jmt_token", re.compile(r"\bjmt_[0-9a-f]{8}_[A-Za-z0-9_-]{20,}\b")),
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b")),
     ("aws_access_key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("slack_token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
@@ -160,7 +165,7 @@ REDACTED = "[REDACTED]"
 CREDENTIAL_CATEGORIES = frozenset({
     "private_key", "pgp_private_key", "private_key_header", "jwt",
     "openai_key", "github_token", "aws_access_key", "slack_token",
-    "bearer_token", "credential_assignment", "generic_token",
+    "bearer_token", "credential_assignment", "generic_token", "jmt_token",
     "db_connection", "verification_code", "password_cn", "api_token",
     "unsafe_metadata",
 })

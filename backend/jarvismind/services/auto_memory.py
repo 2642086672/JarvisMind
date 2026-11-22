@@ -98,6 +98,36 @@ _NON_FACT_PATTERNS: Tuple[re.Pattern[str], ...] = (
     re.compile(r"(?:记住|保存)(?:了)?(?:吗|么|没有)"),
 )
 
+#: Pure social noise. A message whose *entire* content is one of these carries
+#: no fact about the user, so it must never become a memory in either mode.
+#:
+#: The check is deliberately whole-string and small on purpose: a substring rule
+#: would reject "谢谢，另外我叫年糕" (a real fact) and a broad "anything short is
+#: noise" rule would reject short but real facts such as "我叫年糕". "嗯" and
+#: "好" are already caught by the two-character minimum; these are the ones that
+#: are two characters or longer and still say nothing.
+_SOCIAL_ONLY_PHRASES = frozenset({
+    "谢谢", "多谢", "感谢", "谢谢你", "多谢了", "感谢你",
+    "好的", "好", "嗯嗯", "是的", "对的", "收到", "明白了", "了解",
+    "辛苦了", "辛苦了谢谢", "不错", "很好", "太棒了",
+    "ok", "okay", "thanks", "thank you", "thx", "got it", "sure",
+})
+
+#: Trailing punctuation and whitespace that carries no meaning of its own.
+_TRAILING_PUNCT = "。！？~～.!,? \t\n\r，,、"
+
+
+def is_social_only(text: str) -> bool:
+    """True when the whole message is a pleasantry rather than a statement.
+
+    Only the complete, normalised message is compared: any extra clause makes
+    this false, so "谢谢，我叫年糕" is still a legitimate memory.
+    """
+    normalized = " ".join((text or "").split()).strip().strip(_TRAILING_PUNCT).lower()
+    if not normalized:
+        return True
+    return normalized in _SOCIAL_ONLY_PHRASES
+
 
 @dataclass(frozen=True)
 class _Intent:
@@ -225,7 +255,7 @@ def _receipt(
         candidate_id=candidate_id,
         memory_id=memory_id,
         content=content,
-        memory_type=memory_type.value if memory_type is not None else None,
+        memory_type=memory_type,
         sensitive_categories=list(sensitive_categories or []),
         merged_ids=list(merged_ids or []),
         error_type=error_type,
@@ -376,31 +406,65 @@ class AutoMemoryService:
         message_id: Optional[str] = None,
         turn_id: Optional[str] = None,
         source_id: Optional[str] = None,
+        mode: str = "auto",
     ) -> AutoRememberResponse:
-        intent = detect_memory_intent(text_value)
+        """Turn one statement into a governed memory write.
+
+        ``mode="auto"`` is the original behavior: the statement must look like
+        a memory request before it is considered, which is why a plain
+        ``用户平时在 Mac 上开发 JarvisMind。`` is refused with ``NO_INTENT``.
+
+        ``mode="direct"`` is for a caller that has *already* judged the
+        statement worth remembering (the DSH agent, after reading the turn). It
+        skips **only** the two intent heuristics: the trigger-word scan and
+        ``is_fact_like``. Both exist to guess whether a raw user sentence is a
+        memory request, and both misfire on a memory the agent distilled itself
+        ("用户说他最近压力很大，我陪他聊了很久" is rejected as third-party).
+        Everything that makes a write safe still runs in the same order: the
+        credential gate, the JMR sensitivity hold, conflict/duplicate detection,
+        and the single authoritative write through ``ApprovalService``. A direct
+        write is not a privileged write; it is a differently-addressed one.
+        """
+        if mode not in ("auto", "direct"):
+            return _receipt("NO_MEMORY", "invalid_mode", "未知的记忆写入模式。")
+
         existing = self._active_memories()
 
         fact = ""
         status_statement = False
-        if intent.is_memory and intent.fact:
-            fact = intent.fact.strip()
-        elif looks_like_status_statement(text_value):
-            # A project/status update does not start with "我". It is accepted
-            # ONLY when an existing ACTIVE memory shares its subject, so plain
-            # chat cannot create memories through this weaker shape.
-            subject = status_subject_tokens(text_value)
-            if subject and any(
-                subject & status_subject_tokens(content)
-                for _id, content in existing
-            ):
-                fact = " ".join(text_value.split()).strip()
-                status_statement = True
+        if mode == "direct":
+            # No trigger word is required, so the whole statement is the fact.
+            fact = " ".join((text_value or "").split()).strip()
+        else:
+            intent = detect_memory_intent(text_value)
+            if intent.is_memory and intent.fact:
+                fact = intent.fact.strip()
+            elif looks_like_status_statement(text_value):
+                # A project/status update does not start with "我". It is accepted
+                # ONLY when an existing ACTIVE memory shares its subject, so plain
+                # chat cannot create memories through this weaker shape.
+                subject = status_subject_tokens(text_value)
+                if subject and any(
+                    subject & status_subject_tokens(content)
+                    for _id, content in existing
+                ):
+                    fact = " ".join(text_value.split()).strip()
+                    status_statement = True
 
         if not fact:
+            if mode == "direct":
+                # Nothing was written, and no intent word was involved to blame.
+                return _receipt("NO_MEMORY", "fact_empty", "没有可保存的内容。")
             return _receipt("NO_INTENT", "no_memory_intent", "没有识别到明确的记忆请求。")
         if len(fact) < 2:
+            # Applies in both modes: "嗯" / "好" are statements, not memories.
             return _receipt("NO_MEMORY", "fact_empty", "记忆请求中没有可保存的事实。")
-        if not status_statement and not is_fact_like(fact):
+        if is_social_only(fact):
+            # Applies in both modes too: a pleasantry states no fact. In `direct`
+            # mode no intent heuristic runs, so this is what stops the agent's
+            # own judgement from filing "谢谢" as a memory.
+            return _receipt("NO_MEMORY", "social_only", "这句话只是寒暄，没有可保存的事实。")
+        if mode == "auto" and not status_statement and not is_fact_like(fact):
             return _receipt(
                 "NO_MEMORY",
                 "not_a_fact",
