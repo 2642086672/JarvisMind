@@ -8,6 +8,16 @@ export const DEFAULT_CORE_ANCHOR_LIMIT = 6
 export const DEFAULT_CORE_ANCHOR_MAX_CHARS = 500
 export const DEFAULT_TIMEOUT_MS = 2500
 
+/** Who decides what is worth remembering. */
+export const REMEMBER_MODES = ['agent', 'auto', 'both'] as const
+export type RememberMode = 'agent' | 'auto' | 'both'
+export const DEFAULT_REMEMBER_MODE: RememberMode = 'agent'
+
+/** Which guidance the model receives about what to remember. */
+export const MEMORY_STYLES = ['assistant', 'companion'] as const
+export type MemoryStyle = 'assistant' | 'companion'
+export const DEFAULT_MEMORY_STYLE: MemoryStyle = 'assistant'
+
 /**
  * How long one core-anchor read is reused.
  *
@@ -42,6 +52,11 @@ function nonEmptyString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
 }
 
+/** Accept only a documented enum value; anything else falls back to the default. */
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback
+}
+
 /**
  * Apply defaults and bounds to the row config.
  *
@@ -57,6 +72,8 @@ export function normalizeConfig(input: PluginConfig | undefined): ResolvedConfig
     autoRecall: config.autoRecall !== false,
     recallLimit: clampInteger(config.recallLimit, DEFAULT_RECALL_LIMIT, 1, 20),
     autoRemember: config.autoRemember !== false,
+    rememberMode: oneOf(config.rememberMode, REMEMBER_MODES, DEFAULT_REMEMBER_MODE),
+    memoryStyle: oneOf(config.memoryStyle, MEMORY_STYLES, DEFAULT_MEMORY_STYLE),
     coreAnchorEnabled: config.coreAnchorEnabled !== false,
     coreAnchorLimit: clampInteger(config.coreAnchorLimit, DEFAULT_CORE_ANCHOR_LIMIT, 1, 12),
     coreAnchorMaxChars: clampInteger(config.coreAnchorMaxChars, DEFAULT_CORE_ANCHOR_MAX_CHARS, 100, 2000),

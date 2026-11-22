@@ -16,6 +16,11 @@ const MAX_CAPTURE_CHARS = 5000
  * Nothing here is awaited by the chat path: `turnEnded` schedules the request
  * and returns immediately. Failures are contained and logged without content.
  * JarvisMind (JMR) decides whether the statement becomes a memory.
+ *
+ * In the default `rememberMode: 'agent'` this queue stays empty on purpose:
+ * the model decides what is worth keeping and calls `jarvismind_remember`.
+ * Submitting every turn mechanically is what produced noise like "嗯" and
+ * "谢谢" as memory candidates.
  */
 export class CaptureQueue {
   private readonly pending = new Map<string, Map<number, PendingItem[]>>()
@@ -27,9 +32,15 @@ export class CaptureQueue {
     private readonly logger: LoggerLike,
   ) {}
 
+  /** True when a completed turn should be submitted without the model asking. */
+  private get capturesEveryTurn(): boolean {
+    if (!this.config.autoRemember) return false
+    return this.config.rememberMode === 'auto' || this.config.rememberMode === 'both'
+  }
+
   /** Observe a claimed inbox message and remember it for its turn. */
   noteClaimed(agentId: string, message: AgentMessage | undefined, turn: number): void {
-    if (!this.config.autoRemember) return
+    if (!this.capturesEveryTurn) return
     if (!isUserAuthored(message) || message === undefined) return
     const text = messageText(message)
     if (text.length === 0) return
@@ -47,7 +58,7 @@ export class CaptureQueue {
 
   /** Submit the turn's user statements without blocking the reply. */
   turnEnded(agentId: string, conversationId: string, turn: number): void {
-    if (!this.config.autoRemember) return
+    if (!this.capturesEveryTurn) return
     this.flush(agentId, conversationId, (queued) => queued === turn)
   }
 
@@ -59,7 +70,7 @@ export class CaptureQueue {
    * statement would be summarised away. Anything already sent is unaffected.
    */
   compactionStarted(agentId: string, conversationId: string): void {
-    if (!this.config.autoRemember) return
+    if (!this.capturesEveryTurn) return
     this.flush(agentId, conversationId, () => true)
   }
 

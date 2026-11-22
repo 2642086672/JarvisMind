@@ -15,6 +15,12 @@ declare module '@deepseek-ai/schemastery' {
     number(): Schema<number>
     boolean(): Schema<boolean>
     object(shape: Record<string, Schema<any>>): Schema<Record<string, any>>
+    //
+    // The real DSH packages build closed-set config fields this way, for
+    // example ``z.union(["compact", "detailed"]).default("compact")`` in
+    // ``dsh-client-ui-settings-account``. Declared here because the runtime
+    // ships no types for this module.
+    union<T extends readonly unknown[]>(values: [...T]): Schema<T[number]>
   }
 
   export default z

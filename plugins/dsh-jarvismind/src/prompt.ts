@@ -57,6 +57,30 @@ export function buildContextSection(block: string | undefined): PromptSection | 
 }
 
 // ---------------------------------------------------------------------------
+// Memory-selection guidance
+// ---------------------------------------------------------------------------
+
+/** The `<jarvismind-remember-guide>` section name, reused by the plugin and tests. */
+export const MEMORY_GUIDE_SECTION_NAME = 'jarvismind:remember-guide'
+
+/**
+ * Build the guidance section that tells the model when to remember something.
+ *
+ * This is instructions, not data: it is written by the plugin, never by a
+ * memory, and it is deliberately *not* wrapped in an untrusted-data marker. It
+ * carries `interpolate: false` anyway for one reason: the guide is static text,
+ * so there is nothing to interpolate and no reason to run the template engine.
+ */
+export function buildMemoryGuideSection(guide: string | undefined): PromptSection | undefined {
+  if (typeof guide !== 'string' || guide.trim().length === 0) return undefined
+  return {
+    name: MEMORY_GUIDE_SECTION_NAME,
+    text: guide,
+    interpolate: false,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Core anchor
 // ---------------------------------------------------------------------------
 

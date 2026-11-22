@@ -4,16 +4,27 @@ import {
   DEFAULT_CORE_ANCHOR_LIMIT,
   DEFAULT_CORE_ANCHOR_MAX_CHARS,
   DEFAULT_BASE_URL,
+  DEFAULT_MEMORY_STYLE,
   DEFAULT_RECALL_LIMIT,
+  DEFAULT_REMEMBER_MODE,
   DEFAULT_TIMEOUT_MS,
   DEFAULT_TOKEN_ENV,
   DEFAULT_TOKEN_FILE,
+  MEMORY_STYLES,
+  REMEMBER_MODES,
   normalizeConfig,
 } from './config.js'
 import { CaptureQueue } from './capture.js'
 import { CoreAnchorCache } from './core-anchor.js'
 import { JarvisMindHttp } from './http.js'
-import { buildAnchorSection, buildContextSection, contextEntryKeys, mergePromptSections } from './prompt.js'
+import { memoryGuide } from './memory-style.js'
+import {
+  buildAnchorSection,
+  buildContextSection,
+  buildMemoryGuideSection,
+  contextEntryKeys,
+  mergePromptSections,
+} from './prompt.js'
 import { RecallCoordinator } from './recall.js'
 import { publicUrl } from './security.js'
 import { resolveToken } from './token.js'
@@ -28,6 +39,8 @@ export const Config = z.object({
   autoRecall: z.boolean().default(true),
   recallLimit: z.number().default(DEFAULT_RECALL_LIMIT),
   autoRemember: z.boolean().default(true),
+  rememberMode: z.union([...REMEMBER_MODES]).default(DEFAULT_REMEMBER_MODE),
+  memoryStyle: z.union([...MEMORY_STYLES]).default(DEFAULT_MEMORY_STYLE),
   coreAnchorEnabled: z.boolean().default(true),
   coreAnchorLimit: z.number().default(DEFAULT_CORE_ANCHOR_LIMIT),
   coreAnchorMaxChars: z.number().default(DEFAULT_CORE_ANCHOR_MAX_CHARS),
@@ -81,6 +94,13 @@ export function apply(ctx: PluginContext, rawConfig?: PluginConfig): void {
   const recall = new RecallCoordinator(http, config, ctx.logger)
   const capture = new CaptureQueue(http, config, ctx.logger)
   const anchor = new CoreAnchorCache(http, config, ctx.logger)
+  // The brief only makes sense when the model is the one choosing. In `auto`
+  // mode every turn is already submitted, so a "remember this" instruction
+  // would only cause the same statement to be sent twice.
+  const guide =
+    config.rememberMode === 'agent' || config.rememberMode === 'both'
+      ? buildMemoryGuideSection(memoryGuide(config.memoryStyle))
+      : undefined
   const disposers = new Map<string, () => void>()
   const agentsBySession = new Map<string, AgentLike>()
 
@@ -130,6 +150,9 @@ export function apply(ctx: PluginContext, rawConfig?: PluginConfig): void {
 
           const existing = Array.isArray(result?.sections) ? result.sections : []
           const sections = mergePromptSections(existing, [
+            // The selection brief comes first: it is what the model reads before
+            // deciding whether this turn deserves a memory.
+            guide,
             buildAnchorSection(anchorItems, {
               maxChars: config.coreAnchorMaxChars,
               // Do not repeat a memory the per-turn recall already supplied.
@@ -206,7 +229,7 @@ export function apply(ctx: PluginContext, rawConfig?: PluginConfig): void {
   // and capture, and the tool fiber activates as soon as the service appears.
   ctx.inject(['tools'], (toolCtx: PluginContext) => {
     toolCtx.effect(() => {
-      const toolDisposers = createJarvisMindTools(http).map((definition) => toolCtx.tools.register(definition))
+      const toolDisposers = createJarvisMindTools(http, config).map((definition) => toolCtx.tools.register(definition))
       return () => {
         for (const dispose of toolDisposers) dispose()
       }

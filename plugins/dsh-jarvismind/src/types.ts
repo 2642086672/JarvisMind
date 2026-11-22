@@ -1,3 +1,12 @@
+/**
+ * Who decides what is worth remembering. Mirrors `config.ts`; declared here so
+ * `types.ts` stays free of a runtime import from a module that imports it back.
+ */
+export type RememberMode = 'agent' | 'auto' | 'both'
+
+/** Which guidance the model receives about what to remember. */
+export type MemoryStyle = 'assistant' | 'companion'
+
 /** Public configuration keys accepted from the Cordis row / user patch layer. */
 export interface PluginConfig {
   /** JarvisMind server root, for example `http://127.0.0.1:8777`. */
@@ -12,6 +21,18 @@ export interface PluginConfig {
   recallLimit?: number
   /** Submit user turns to the governed remember endpoint after each turn. */
   autoRemember?: boolean
+  /**
+   * Who decides what is worth remembering.
+   *
+   * - `agent` (default): the model calls `jarvismind_remember` when it judges a
+   *   statement worth keeping. No mechanical `turn/end` capture, so noise such
+   *   as "嗯" / "谢谢" / a transient error never becomes a candidate.
+   * - `auto`: the original behavior, submitting every user turn after it ends.
+   * - `both`: the model decides *and* every turn is submitted.
+   */
+  rememberMode?: 'agent' | 'auto' | 'both'
+  /** Which guidance the model receives about what to remember. */
+  memoryStyle?: 'assistant' | 'companion'
   /** Inject the always-on `<jarvismind-core-anchor>` soul/relationship block. */
   coreAnchorEnabled?: boolean
   /** Maximum number of memories kept in the core anchor. */
@@ -30,6 +51,8 @@ export interface ResolvedConfig {
   autoRecall: boolean
   recallLimit: number
   autoRemember: boolean
+  rememberMode: RememberMode
+  memoryStyle: MemoryStyle
   coreAnchorEnabled: boolean
   coreAnchorLimit: number
   coreAnchorMaxChars: number

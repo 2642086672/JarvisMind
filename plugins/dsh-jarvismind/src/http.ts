@@ -202,7 +202,7 @@ export class JarvisMindHttp {
 
   /** Submit one user statement through the governed remember endpoint. */
   async remember(
-    input: { text: string; conversationId: string; messageId?: string; turnId?: string },
+    input: { text: string; conversationId: string; messageId?: string; turnId?: string; mode?: 'auto' | 'direct' },
     signal?: AbortSignal,
   ): Promise<RememberResult> {
     const body: Record<string, unknown> = {
@@ -211,6 +211,9 @@ export class JarvisMindHttp {
     }
     if (input.messageId !== undefined) body.message_id = input.messageId
     if (input.turnId !== undefined) body.turn_id = input.turnId
+    // Omitted means the server default ("auto"), which keeps every existing
+    // caller on its original behavior.
+    if (input.mode !== undefined) body.mode = input.mode
 
     const envelope = await this.request<{ data: RememberResult }>('POST', '/api/v1/agent/remember', {
       body,

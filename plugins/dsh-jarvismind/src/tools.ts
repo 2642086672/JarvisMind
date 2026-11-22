@@ -2,7 +2,7 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { JarvisMindHttp } from './http.js'
 import { JarvisMindError } from './http.js'
 import { redactSecrets, safeErrorMessage } from './security.js'
-import type { ToolExecLike } from './types.js'
+import type { ResolvedConfig, ToolExecLike } from './types.js'
 
 const NOT_CONFIGURED =
   'JarvisMind is not configured: no agent token was found. Set JARVISMIND_AGENT_TOKEN or write the token to ~/.jarvismind/dsh-agent.token, then retry.'
@@ -35,7 +35,7 @@ function truncate(text: string, limit: number): string {
  * endpoints as the automatic hooks. `jarvismind_forget` can only create a
  * two-step request; it never deletes anything.
  */
-export function createJarvisMindTools(http: JarvisMindHttp): ToolDefinition[] {
+export function createJarvisMindTools(http: JarvisMindHttp, config: ResolvedConfig): ToolDefinition[] {
   return [
     defineTool({
       name: 'jarvismind_search',
@@ -70,7 +70,13 @@ export function createJarvisMindTools(http: JarvisMindHttp): ToolDefinition[] {
     defineTool({
       name: 'jarvismind_remember',
       description:
-        'Submit one durable fact or preference about the user to JarvisMind. Use this when the user states something worth remembering across conversations, and especially when they express a naming preference or form of address, a standing agreement about how the two of you interact, a core preference, or an important date or shared experience. Those are what keep the relationship continuous after the context is compacted or a new session starts. JarvisMind (JMR) decides whether it is stored; sensitive content may be held for owner review.',
+        [
+          'Submit one durable fact or preference about the user to JarvisMind. Use this when the current turn contains something worth carrying into future conversations.',
+          'Strong signals: a naming preference or form of address, a standing agreement about how the two of you interact, a core preference, an important date, or a shared experience worth returning to.',
+          'Those are what keep the relationship continuous after the context is compacted or a new session starts.',
+          'Do not use this for acknowledgements, small talk, transient errors, or anything containing a password, API key, token or private key.',
+          'JarvisMind (JMR) still applies its credential gate, sensitivity hold and de-duplication; sensitive content may be held for owner review.',
+        ].join(' '),
       parameters: {
         text: { type: 'string', required: true, description: 'The fact or preference, written as a standalone statement.' },
         conversation_id: { type: 'string', description: 'Conversation id. Defaults to the current DSH session id.' },
@@ -86,9 +92,20 @@ export function createJarvisMindTools(http: JarvisMindHttp): ToolDefinition[] {
         if (conversationId === undefined || conversationId.length === 0) {
           return 'Cannot remember: no conversation id is available for this session.'
         }
+        // `agent` and `both` let the model's own judgement be the trigger, so the
+        // server must not re-apply the intent-word heuristic. `auto` keeps the
+        // heuristic: there the turn/end capture is the primary path and the tool
+        // is only a fallback, so it should behave exactly like a user statement.
+        const mode = config.rememberMode === 'agent' || config.rememberMode === 'both' ? 'direct' : 'auto'
         try {
           const receipt = await http.remember(
-            { text: truncate(text, 5000), conversationId, messageId: undefined, turnId: undefined },
+            {
+              text: truncate(text, 5000),
+              conversationId,
+              messageId: undefined,
+              turnId: undefined,
+              mode,
+            },
             exec.signal,
           )
           const status = String(receipt?.status ?? 'UNKNOWN')

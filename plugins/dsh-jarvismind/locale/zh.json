@@ -1,20 +1,65 @@
 {
   "meta": {
     "title": "JarvisMind 记忆",
-    "description": "通过本地 JarvisMind 服务实现跨会话自动记忆召回与捕获，并提供每轮常驻的核心锚点，在上下文压缩或新开会话后仍保住称呼、语气与相处约定；另含显式的记忆搜索、记住与遗忘工具。"
+    "description": "通过本地 JarvisMind 服务实现跨会话自动记忆召回与捕获、常驻的灵魂与关系锚点，并提供显式的记忆搜索、记住与遗忘工具。"
   },
   "config": {
+    "baseUrl": {
+      "title": "服务地址",
+      "description": "本地 JarvisMind 服务的根地址，例如 http://127.0.0.1:8777。"
+    },
+    "tokenEnv": {
+      "title": "令牌环境变量",
+      "description": "优先于令牌文件读取的环境变量名。"
+    },
+    "tokenFile": {
+      "title": "令牌文件",
+      "description": "存放 agent 令牌的备用文件，支持 ~ 展开。"
+    },
+    "autoRecall": {
+      "title": "自动召回",
+      "description": "在每次模型调用前，把相关的长期记忆注入系统提示词。"
+    },
+    "recallLimit": {
+      "title": "召回条数",
+      "description": "单条消息最多召回的记忆条数（1-20）。"
+    },
+    "autoRemember": {
+      "title": "自动捕获",
+      "description": "允许自动提交记忆。关闭后 JarvisMind 变为纯只读。"
+    },
+    "rememberMode": {
+      "title": "由谁决定记住什么",
+      "description": "agent：由本会话 AI 自主判断并调用记住工具，因此「嗯」「谢谢」这类噪音不会被写入（推荐）。auto：每轮用户消息都自动提交。both：AI 自主判断的同时，每轮也都提交。",
+      "enum": {
+        "agent": "AI 自主判断（推荐）",
+        "auto": "每轮自动提交",
+        "both": "AI 判断 + 每轮提交"
+      }
+    },
+    "memoryStyle": {
+      "title": "记忆风格",
+      "description": "assistant：聚焦个人偏好、项目决策、工作习惯与重要日期。companion：还会留意你们之间的梗与默契、重要事件、真实的情绪转折，以及彼此的约定。",
+      "enum": {
+        "assistant": "通用助手",
+        "companion": "陪伴伙伴"
+      }
+    },
     "coreAnchorEnabled": {
-      "title": "核心锚点",
-      "description": "注入每轮常驻的 <jarvismind-core-anchor> 锚点，让用户的称呼、语气偏好、核心偏好与长期相处约定在上下文压缩或新开会话后依然保留。"
+      "title": "灵魂连续性锚点",
+      "description": "在提示词中常驻一组定义「这个人是谁」的核心记忆，避免上下文压缩或新开会话后忘记该怎么称呼对方。"
     },
     "coreAnchorLimit": {
-      "title": "核心锚点条数",
-      "description": "核心锚点保留的记忆条数，范围 1 到 12。条数越多关系越完整，但占用的上下文也越多。"
+      "title": "锚点记忆条数",
+      "description": "锚点中保留的核心记忆条数上限（1-12）。"
     },
     "coreAnchorMaxChars": {
-      "title": "核心锚点单条字数",
-      "description": "核心锚点中每条记忆保留的最大字符数，范围 100 到 2000。超长内容按条截断，而不是整条丢弃。"
+      "title": "锚点单条字数",
+      "description": "每条锚点记忆保留的最大字数（100-2000）。超长会被截断，避免单条记忆撑爆上下文。"
+    },
+    "timeoutMs": {
+      "title": "请求超时",
+      "description": "单次 JarvisMind 请求的毫秒上限。超时只会跳过注入，不会阻塞对话。"
     }
   }
 }

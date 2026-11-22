@@ -9,6 +9,13 @@ const config = {
   autoRecall: true,
   recallLimit: 6,
   autoRemember: true,
+  // These cases describe the original turn/end capture, which the `auto` and
+  // `both` modes keep. The default `agent` mode is covered separately below.
+  rememberMode: 'auto',
+  memoryStyle: 'assistant',
+  coreAnchorEnabled: true,
+  coreAnchorLimit: 6,
+  coreAnchorMaxChars: 500,
   timeoutMs: 2500,
 }
 
@@ -157,4 +164,80 @@ test('compactionStarted on an idle agent is a no-op', () => {
   }
   const capture = new CaptureQueue(http, config, { info() {}, warn() {}, debug() {} })
   assert.equal(capture.compactionStarted('missing', 's1'), undefined)
+})
+
+// ---------------------------------------------------------------------------
+// rememberMode
+// ---------------------------------------------------------------------------
+
+test('rememberMode=agent never captures a turn mechanically', async () => {
+  let calls = 0
+  const http = {
+    async remember() {
+      calls += 1
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent' },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  // The noise this mode exists to filter: acknowledgements and a transient log.
+  capture.noteClaimed('a1', userMessage('m1', '嗯'), 1)
+  capture.noteClaimed('a1', userMessage('m2', '谢谢'), 2)
+  capture.noteClaimed('a1', userMessage('m3', 'TypeError: undefined is not a function'), 3)
+  assert.equal(capture.pendingCount(), 0)
+
+  capture.turnEnded('a1', 's1', 1)
+  capture.turnEnded('a1', 's1', 2)
+  capture.turnEnded('a1', 's1', 3)
+  capture.compactionStarted('a1', 's1')
+  await capture.drain()
+
+  assert.equal(calls, 0)
+})
+
+test('rememberMode=both captures every turn and still leaves the tool available', async () => {
+  const calls = []
+  const http = {
+    async remember(input) {
+      calls.push(input)
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'both' },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  capture.noteClaimed('a1', userMessage('m1', '我在写 Rust'), 1)
+  assert.equal(capture.pendingCount(), 1)
+  capture.turnEnded('a1', 's1', 1)
+  await capture.drain()
+  assert.deepEqual(
+    calls.map((call) => call.text),
+    ['我在写 Rust'],
+  )
+})
+
+test('rememberMode=agent keeps autoRemember=false meaning no capture at all', () => {
+  let calls = 0
+  const http = {
+    async remember() {
+      calls += 1
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent', autoRemember: false },
+    { info() {}, warn() {}, debug() {} },
+  )
+  capture.noteClaimed('a1', userMessage('m1', 'x'), 1)
+  capture.turnEnded('a1', 's1', 1)
+  assert.equal(calls, 0)
+  assert.equal(capture.pendingCount(), 0)
 })

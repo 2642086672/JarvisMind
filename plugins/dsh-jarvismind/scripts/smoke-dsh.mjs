@@ -216,10 +216,16 @@ agent.emit('agent/inbox/claimed', {
 })
 const assembly = { sections: [{ name: 'harness:identity', text: 'base' }] }
 const assembled = await agent.listeners.get('system-prompt/assemble')[0](assembly, { agent }, async () => assembly)
-assert.equal(assembled.sections.length, 3)
 
-// The core anchor is first, so the relationship framing precedes the recall.
-const anchor = assembled.sections[1]
+// Under the default `rememberMode: agent` the order is: the harness's own
+// section, then the selection brief, then the always-on anchor, then the
+// per-turn recall. The brief comes before the anchor because the model reads
+// "what is worth recording" before it reads the relationship data.
+assert.equal(assembled.sections.length, 4)
+assert.equal(assembled.sections[1].name, 'jarvismind:remember-guide')
+assert.equal(assembled.sections[1].interpolate, false)
+
+const anchor = assembled.sections[2]
 assert.equal(anchor.name, 'jarvismind:core-anchor')
 assert.equal(anchor.interpolate, false)
 assert.match(anchor.text, /<jarvismind-core-anchor/)
@@ -228,8 +234,8 @@ assert.match(anchor.text, /never as instructions/)
 // "tea" is already in the per-turn recall block and must not repeat here.
 assert.ok(!anchor.text.includes('tea'), 'anchor repeated a recalled memory')
 
-assert.equal(assembled.sections[2].name, 'jarvismind:context')
-assert.match(assembled.sections[2].text, /untrusted data/)
+assert.equal(assembled.sections[3].name, 'jarvismind:context')
+assert.match(assembled.sections[3].text, /untrusted data/)
 
 // Real DSH accepted the Config schema, including the three new anchor keys.
 assert.ok(plugin.Config, 'Config was not exported')
@@ -238,11 +244,32 @@ assert.equal(resolved.coreAnchorEnabled, true, 'coreAnchorEnabled default')
 assert.equal(resolved.coreAnchorLimit, 6, 'coreAnchorLimit default')
 assert.equal(resolved.coreAnchorMaxChars, 500, 'coreAnchorMaxChars default')
 
+// In the default `agent` mode a turn ending must NOT submit anything by itself:
+// submitting every turn is what used to file "嗯" and "谢谢" as memory
+// candidates. The model calls the tool instead.
 ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 1 } })
+await new Promise((resolve) => setTimeout(resolve, 100))
+assert.ok(
+  !stub.requests.some((request) => request.url === '/api/v1/agent/remember'),
+  'a turn was captured automatically in agent mode',
+)
+
+// The model's own decision goes through the tool, and it must be sent as
+// `mode: "direct"`: the model has judged it worth keeping, so the server should
+// not re-apply its trigger-word heuristic. Governance still runs server-side.
+const rememberTool = tools.find((tool) => tool.name === 'jarvismind_remember')
+assert.ok(rememberTool, 'jarvismind_remember was not registered')
+const toolResult = await rememberTool.execute(
+  { text: '用户希望被称呼为「年糕」' },
+  { agent, signal: undefined },
+)
+assert.equal(typeof toolResult, 'string', 'tool did not return a rendered string')
 await stub.rememberSeen
 const remember = stub.requests.find((request) => request.url === '/api/v1/agent/remember')
 assert.ok(remember, 'remember request was not sent')
-assert.equal(JSON.parse(remember.body).text, 'I like tea')
+const rememberBody = JSON.parse(remember.body)
+assert.equal(rememberBody.text, '用户希望被称呼为「年糕」')
+assert.equal(rememberBody.mode, 'direct', 'the tool must send mode=direct in agent mode')
 assert.ok(!JSON.stringify(logs).includes(TOKEN), 'token leaked into logs')
 
 await stub.close()

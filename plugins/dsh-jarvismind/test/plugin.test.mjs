@@ -167,6 +167,25 @@ function userMessage(id, text) {
   return { id, role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } }
 }
 
+/**
+ * Fail instead of hanging.
+ *
+ * `startServer` resolves `rememberSeen` only when a remember request actually
+ * arrives. A behavior change that stops the plugin from submitting would
+ * otherwise leave the suite waiting forever with no signal about which
+ * assertion the request was meant to satisfy.
+ */
+function withTimeout(promise, label, ms = 5000) {
+  return Promise.race([
+    promise,
+    new Promise((_resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), ms)
+      // Do not keep the test process alive just for the guard.
+      timer.unref?.()
+    }),
+  ])
+}
+
 test('the plugin exports the Cordis Host plugin surface', () => {
   assert.equal(typeof plugin.apply, 'function')
   assert.ok(Array.isArray(plugin.inject))
@@ -188,6 +207,9 @@ test('recall, capture and the three tools work against a live HTTP server', asyn
       timeoutMs: 1000,
       autoRecall: true,
       autoRemember: true,
+      // This case exercises the turn/end capture path, which `auto` owns.
+      // The default `agent` mode is covered by its own case below.
+      rememberMode: 'auto',
     })
 
     assert.deepEqual(
@@ -202,7 +224,13 @@ test('recall, capture and the three tools work against a live HTTP server', asyn
     const assembly = { sections: [{ name: 'harness:identity', text: 'base prompt' }] }
     const result = await assemble(assembly, { agent }, async () => assembly)
 
-    assert.equal(result.sections.length, 3)
+    // harness identity, the anchor, the recall. `auto` mode adds no selection
+    // brief: every turn is already submitted, so advising the model to call the
+    // tool would duplicate the same statement.
+    assert.deepEqual(
+      result.sections.map((section) => section.name),
+      ['harness:identity', 'jarvismind:core-anchor', 'jarvismind:context'],
+    )
     // The anchor precedes the turn-specific recall so the relationship framing
     // is established before the facts of this message.
     const anchor = result.sections[1]
@@ -221,7 +249,7 @@ test('recall, capture and the three tools work against a live HTTP server', asyn
     assert.match(section.text, /untrusted data/)
 
     ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 1 } })
-    await server.rememberSeen
+    await withTimeout(server.rememberSeen, 'the turn/end remember request')
 
     const remember = server.requests.find((request) => request.url === '/api/v1/agent/remember')
     assert.ok(remember)
@@ -276,7 +304,14 @@ test('an unreachable JarvisMind fails open and leaves the prompt untouched', asy
     const assembly = { sections: [{ name: 'harness:identity', text: 'base prompt' }] }
     const result = await assemble(assembly, { agent }, async () => assembly)
 
-    assert.deepEqual(result.sections, assembly.sections)
+    // Neither the anchor nor the recall could be read, so nothing data-derived
+    // is added. The selection brief is static plugin text, not a memory, so it
+    // survives a JarvisMind outage: the model can still choose to remember
+    // something and the request will be retried when the server returns.
+    assert.deepEqual(
+      result.sections.map((section) => section.name),
+      ['harness:identity', 'jarvismind:remember-guide'],
+    )
   } finally {
     delete process.env.JM_PLUGIN_TEST_TOKEN
   }
@@ -295,13 +330,16 @@ test('compaction/start flushes queued statements before the summary is written',
       timeoutMs: 1000,
       autoRecall: false,
       autoRemember: true,
+      // `compaction/start` only flushes statements that the turn/end capture
+      // path queued, which the `auto` mode owns.
+      rememberMode: 'auto',
     })
 
     // A statement is queued but its turn has not ended yet.
     agent.emit('agent/inbox/claimed', { message: userMessage('mc1', '请记住：叫我年糕'), turn: 5 })
 
     ctx.emit('session/event', agent.session, { type: 'compaction/start', data: { turn: 5 } })
-    await server.rememberSeen
+    await withTimeout(server.rememberSeen, 'the compaction remember request')
 
     const remember = server.requests.find((request) => request.url === '/api/v1/agent/remember')
     assert.ok(remember, 'compaction did not flush the queued statement')
@@ -339,7 +377,7 @@ test('coreAnchorEnabled=false injects only the per-turn recall', async () => {
 
     assert.deepEqual(
       result.sections.map((section) => section.name),
-      ['harness:identity', 'jarvismind:context'],
+      ['harness:identity', 'jarvismind:remember-guide', 'jarvismind:context'],
     )
     assert.ok(!server.requests.some((request) => request.url.startsWith('/api/v1/agent/memories')))
   } finally {
@@ -372,8 +410,12 @@ test('a 5xx anchor response fails open without a leaked token', async () => {
     const assembly = { sections: [{ name: 'harness:identity', text: 'base prompt' }] }
     const result = await assemble(assembly, { agent }, async () => assembly)
 
-    // No anchor, no recall, and the prompt is exactly what the harness produced.
-    assert.deepEqual(result.sections, assembly.sections)
+    // No anchor and no recall: the prompt keeps only what the harness produced
+    // plus the static selection brief. Nothing the server sent is echoed.
+    assert.deepEqual(
+      result.sections.map((section) => section.name),
+      ['harness:identity', 'jarvismind:remember-guide'],
+    )
     assert.ok(!JSON.stringify(logs).includes(TOKEN))
   } finally {
     delete process.env.JM_PLUGIN_TEST_TOKEN
