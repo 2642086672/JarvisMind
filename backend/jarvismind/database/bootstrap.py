@@ -7,15 +7,26 @@ rebuilt or altered here. The schema comes from ``MIGRATIONS``, which is pure dat
 
 Creation runs inside one explicit ``BEGIN IMMEDIATE`` transaction on the raw
 driver connection. SQLite DDL is transactional, so a failure leaves no partial
-schema behind.
+schema behind. Anything a fresh install must also contain is passed *in*
+through ``extra_installer``: this is the lowest layer, so it never imports the
+knowledge graph (which depends on it).
 """
 from __future__ import annotations
 
 import re
+from typing import Any, Callable, Optional
 
 from ..core.timeutils import utc_now_iso
 from .connection import DatabaseManager
 from .migrations import MIGRATIONS, SCHEMA_MIGRATIONS_TABLE
+
+#: A hook run *inside* the database-creation transaction.
+#:
+#: The callable receives the live DBAPI cursor and the creation timestamp, and
+#: must be idempotent. Running it in the same transaction is what makes "the
+#: database exists" and "everything it needs exists" one atomic step. The cursor
+#: is typed loosely because this module must not import a driver-specific type.
+SchemaInstaller = Callable[[Any, str], None]
 
 FTS5_SETTING_KEY = "jme.fts5_enabled"
 SCHEMA_VERSION_SETTING_KEY = "jme.schema_version"
@@ -51,12 +62,25 @@ def _fts5_available(cursor) -> bool:
     return any(str(row[0]).upper() == "ENABLE_FTS5" for row in rows)
 
 
-def create_fresh_database(manager: DatabaseManager) -> int:
-    """Create the complete schema in an empty database and return its version."""
+def create_fresh_database(
+    manager: DatabaseManager,
+    *,
+    extra_installer: Optional[SchemaInstaller] = None,
+) -> int:
+    """Create the complete schema in an empty database and return its version.
+
+    ``extra_installer`` lets the caller add its own tables inside the same
+    transaction. The composition root passes the knowledge-graph installer so a
+    fresh install is complete on first launch, while this module stays free of
+    any dependency on it.
+    """
     code_version = MIGRATIONS[-1].version
     raw = manager.engine.raw_connection()
     try:
         driver = raw.driver_connection
+        # SQLAlchemy types this as optional, but a raw connection always has a
+        # DBAPI driver behind it.
+        assert driver is not None
         cursor = driver.cursor()
         try:
             cursor.execute("BEGIN IMMEDIATE")
@@ -90,6 +114,8 @@ def create_fresh_database(manager: DatabaseManager) -> int:
                 "VALUES (?, ?, ?)",
                 (SCHEMA_VERSION_SETTING_KEY, str(code_version), now),
             )
+            if extra_installer is not None:
+                extra_installer(cursor, now)
             driver.commit()
         except Exception:
             driver.rollback()
@@ -103,5 +129,6 @@ def create_fresh_database(manager: DatabaseManager) -> int:
 
 __all__ = [
     "DatabaseAlreadyInitializedError",
+    "SchemaInstaller",
     "create_fresh_database",
 ]

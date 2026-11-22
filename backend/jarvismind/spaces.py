@@ -24,6 +24,7 @@ from .control.errors import ControlConflictError, SpaceNotProvisionedError
 from .control.service import DEFAULT_SPACE_ID, validate_space_id
 from .database.bootstrap import create_fresh_database
 from .database.connection import DatabaseManager
+from .jkg.bootstrap import install_into_fresh_database
 
 SPACES_DIRNAME = "spaces"
 DATABASE_FILENAME = "jarvismind.db"
@@ -90,7 +91,9 @@ class SpaceRegistry:
             settings = self.settings_for(space_id)
             manager = DatabaseManager(settings)
             try:
-                version = create_fresh_database(manager)
+                # A new space ships with the graph ready, so its console works
+                # on first launch. Passed in to keep ``database/`` below JKG.
+                version = create_fresh_database(manager, extra_installer=install_into_fresh_database)
             except Exception:
                 manager.dispose()
                 shutil.rmtree(directory, ignore_errors=True)

@@ -28,10 +28,13 @@ def _init_db(settings: Settings) -> int:
     from .control.service import ControlService
     from .database.bootstrap import DatabaseAlreadyInitializedError, create_fresh_database
     from .database.connection import DatabaseManager
+    from .jkg.bootstrap import install_into_fresh_database
 
     manager = DatabaseManager(settings)
     try:
-        version = create_fresh_database(manager)
+        # The graph installer is passed in rather than imported by the database
+        # layer, which must stay below JKG in the dependency order.
+        version = create_fresh_database(manager, extra_installer=install_into_fresh_database)
     except DatabaseAlreadyInitializedError as exc:
         print(f"init-db refused: {exc}", file=sys.stderr)
         return 1
