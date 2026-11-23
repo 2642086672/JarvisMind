@@ -22,7 +22,25 @@ correct all of it.
   API management, backups, settings.
 - **API v1 and SDKs.** A versioned `/api/v1` surface for agents, with Python and TypeScript clients.
 - **DSH example and native plugin.** A runnable integration with a cross-session demo, plus a Cordis
-  plugin (`plugins/dsh-jarvismind/`) that wires recall and capture into DSH Desktop automatically.
+  plugin (`plugins/dsh-jarvismind/`) that wires recall and capture into DSH Desktop automatically. The
+  plugin keeps a `<jarvismind-core-anchor>` block in every system prompt, so a form of address, a standing
+  agreement or a shared reference survives context compaction and a new session. It also lets the model —
+  rather than a per-turn trigger — decide what is worth remembering, and offers a `companion` style for
+  assistants kept as long-term companions.
+
+## What's new
+
+- **The model decides what to remember.** `rememberMode: agent` is now the plugin default: instead of
+  submitting every turn, the model calls `jarvismind_remember` when something matters. A greeting or a
+  one-word acknowledgement no longer becomes a memory candidate.
+- **A `companion` style.** Besides working preferences and decisions, the model can be steered to notice
+  shared references, significant dates, emotional turns and standing agreements — and to record them
+  silently, without announcing the save.
+- **Soul continuity across compaction.** The `<jarvismind-core-anchor>` block is rebuilt on every turn from
+  your core profile, form of address and long-term relationship memories, and de-duplicated against the
+  per-turn recall. It is data, never a template and never an instruction.
+- **The knowledge graph works on a fresh install.** `init-db` and new-space provisioning create the graph
+  tables inside the database-creation transaction, so the console's graph view is not empty on first launch.
 
 ## Architecture
 
@@ -103,10 +121,11 @@ view works on first launch.
 
 | Area | Result in the release environment |
 | --- | --- |
-| Backend test suite (including the P0 release gate) | 2485 passed, 0 failed; gate 67/67 |
+| Backend test suite (including the P0 release gate) | 2532 passed, 0 failed, 0 skipped; gate 67/67 |
 | Console | typecheck clean, 15 unit tests pass, production build succeeds |
 | Python SDK | 10 tests pass |
 | TypeScript SDK | 9 tests pass |
+| DSH plugin | 76 tests pass; build clean; `SMOKE OK` against DSH Desktop 0.2.0-rc.2 |
 | DSH cross-session demo | 16/16 checks, Python and TypeScript, against a live server |
 | Docker image, Windows and Linux installs, a real DSH application | **not verified** (see [the release report](RELEASE-1.0-FINAL-REPORT.md)) |
 
