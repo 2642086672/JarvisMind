@@ -1,6 +1,6 @@
 # JarvisMind 1.0
 
-**简体中文** | [English](README.en.md)
+**简体中文** | [English](README.EN.md)
 
 > 我要给她完整的一生。
 > *I will give her a whole life.* —— 出自《流浪地球》（*The Wandering Earth*）
