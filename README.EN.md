@@ -6,6 +6,14 @@
 
 **JarvisMind** is an open, self-hostable **unified memory infrastructure for AI systems** (MIT licensed). It lets any AI assistant — **DeepSeek Harness (DSH)**, Claude, ChatGPT, a local agent, or an enterprise system — remember, recall, govern and truly forget what the user has told it, all in one place. A visual web console lets the owner view, correct and control every memory at any time.
 
+## 📣 Feedback & community
+
+Every piece of feedback matters during the public beta:
+
+* 🐛 **Report a bug** · 💡 **Request a feature** · 🧪 **Share beta impressions**: [pick a feedback type here](https://github.com/2642086672/JarvisMind/issues/new/choose) (takes ~30 seconds; blank issues are welcome too)
+* Stuck on installation, confused by the console, or the companion mode feels off? Just tell us — no formal write-up needed.
+* ⚠️ Never paste real API tokens or personal keys; report security issues privately via [SECURITY.md](SECURITY.md).
+
 ## Why JarvisMind?
 
 * **No more black-box amnesia:** different AI tools share one self-hosted memory, so switching clients no longer means starting from zero.

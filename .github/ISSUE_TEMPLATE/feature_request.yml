@@ -1,0 +1,31 @@
+name: "💡 功能建议 / Feature request"
+description: "希望 JarvisMind 增加或改进什么 / Suggest an improvement"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        想到什么就说什么，不用写得很正式。/ Rough ideas are welcome — no formal write-up needed.
+  - type: dropdown
+    id: use-case
+    attributes:
+      label: 使用场景 / Use case
+      options:
+        - 长期陪伴 / Long-term companion
+        - 个人助手 / Personal assistant
+        - 编程 Agent / Coding agent
+        - 其他 / Other
+    validations:
+      required: true
+  - type: textarea
+    id: capability
+    attributes:
+      label: 期望能力 / What you want
+      description: 你希望 JarvisMind 能做到什么？/ What should JarvisMind be able to do?
+    validations:
+      required: true
+  - type: textarea
+    id: pain-point
+    attributes:
+      label: 痛点描述 / Pain point（可选 / optional）
+      description: 现在哪里不方便、缺了什么？/ What is hard or missing today?

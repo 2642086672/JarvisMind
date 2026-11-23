@@ -1,0 +1,61 @@
+name: "🐛 Bug 反馈 / Bug report"
+description: "报告 JarvisMind 的问题 / Report a problem with JarvisMind"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > ⚠️ **请勿粘贴真实的 API Token、密码或个人密钥！** 贴日志前请先打码（例如 `jmt_***`）。
+        > ⚠️ **Never paste real API tokens, passwords or personal keys.** Redact them first (e.g. `jmt_***`).
+        >
+        > 安全漏洞请按 [SECURITY.md](https://github.com/2642086672/JarvisMind/blob/main/SECURITY.md) 私下报告，不要开公开 Issue。
+        > Security vulnerabilities: report privately per SECURITY.md, not as a public issue.
+  - type: dropdown
+    id: os
+    attributes:
+      label: 系统 / Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Docker
+    validations:
+      required: true
+  - type: dropdown
+    id: integration
+    attributes:
+      label: 接入方式 / How you use JarvisMind
+      options:
+        - 仅控制台 / Console only
+        - DSH 桌面版插件 / DSH Desktop plugin
+        - Python SDK
+        - TypeScript SDK
+        - API 直接调用 / Direct API
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题简述 / What happened
+      description: 发生了什么？你期望的是什么？/ What went wrong, and what did you expect?
+      placeholder: 例如：控制台登录页一直转圈…… / e.g. the console sign-in page spins forever...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / Version（可选 / optional）
+      placeholder: "python -m jarvismind version 的输出 / output of python -m jarvismind version"
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce（可选 / optional）
+      placeholder: |
+        1. ...
+        2. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: 报错日志 / Error logs（可选 / optional）
+      description: 记得先删掉令牌、密钥与个人信息 / Remember to remove tokens, keys and personal details first.
+      render: shell

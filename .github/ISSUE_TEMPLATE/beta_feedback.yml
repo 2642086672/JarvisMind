@@ -1,0 +1,33 @@
+name: "🧪 1.0 公测体验与吐槽 / Beta feedback"
+description: "安装、控制台、陪伴模式的真实体感，欢迎直接吐槽 / First impressions, rants and praise welcome"
+labels: ["beta-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        从论坛 / 小黑盒来的朋友直接说感受就行，几句话也可以，不用写得很正式。
+        Coming from a forum? Just tell us how it felt — a few sentences are enough.
+        > ⚠️ 请勿粘贴真实的 API Token 或个人密钥 / Never paste real API tokens or personal keys.
+  - type: dropdown
+    id: topic
+    attributes:
+      label: 想聊哪块 / Topic（可选 / optional）
+      options:
+        - 安装与部署 / Install & setup
+        - 控制台界面 / Console UI
+        - 陪伴模式体感 / Companion mode feel
+        - DSH 插件 / DSH plugin
+        - 其他 / Other
+  - type: textarea
+    id: experience
+    attributes:
+      label: 你的体验 / Your experience
+      description: 哪里爽、哪里卡、哪里看不懂，都可以说 / What worked, what confused you, what broke — anything goes.
+      placeholder: 随便写几句…… / A few honest sentences...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 系统环境 / Environment（可选 / optional）
+      placeholder: 如 Windows 11 / macOS 15 / Docker，可留空 / e.g. Windows 11, or leave blank

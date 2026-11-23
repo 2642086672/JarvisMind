@@ -1,24 +1,20 @@
-## What this changes
+## 改动说明 / What this changes
 
-<!-- One or two sentences. -->
+<!-- 一两句话：改了什么、为什么 / One or two sentences: what and why -->
 
-## Why
+## 涉及模块 / Modules touched
 
-## How it was tested
+- [ ] backend
+- [ ] console
+- [ ] sdk/python · sdk/typescript
+- [ ] plugins/dsh-jarvismind
+- [ ] docs / .github（纯文档或模板 / docs or templates only）
 
-- [ ] `python -m pytest` in `backend/` (full suite)
-- [ ] `npm run typecheck`, `npm test`, `npm run build` in `console/` (if the console changed)
-- [ ] `npm test` in `sdk/typescript` and `python -m pytest tests` in `sdk/python` (if the SDKs changed)
-- [ ] The DSH demo against a running server (if the API changed)
+## 测试 / Tests
 
-## Checklist
+- [ ] 已运行对应模块的单测 / Ran the unit tests for the touched modules（命令见 CONTRIBUTING.md / commands in CONTRIBUTING.md）
+- [ ] 纯文档 / 模板改动，无需测试 / Docs or templates only, no tests needed
 
-- [ ] Documentation updated (`docs/`, and `CHANGELOG.md` for user-visible changes)
-- [ ] Access control changes have a test that refuses the wrong access
-- [ ] No memory is written by a path that skips the credential gate or the sensitivity policy
-- [ ] No agent route returns a confirmation token or approves a request
-- [ ] No secrets, data directories, backups or logs are included in this change
+## 确认 / Confirmations
 
-## Security notes
-
-<!-- Anything a reviewer should look at closely. -->
+- [ ] 未包含个人隐私、真实令牌、密钥或真实记忆数据 / No personal data, real tokens, keys or real memory data included
