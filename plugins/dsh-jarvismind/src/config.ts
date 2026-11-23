@@ -6,7 +6,7 @@ export const DEFAULT_TOKEN_ENV = 'JARVISMIND_AGENT_TOKEN'
 export const DEFAULT_RECALL_LIMIT = 6
 export const DEFAULT_CORE_ANCHOR_LIMIT = 6
 export const DEFAULT_CORE_ANCHOR_MAX_CHARS = 500
-export const DEFAULT_TIMEOUT_MS = 2500
+export const DEFAULT_TIMEOUT_MS = 6000
 
 /** Who decides what is worth remembering. */
 export const REMEMBER_MODES = ['agent', 'auto', 'both'] as const
@@ -17,6 +17,17 @@ export const DEFAULT_REMEMBER_MODE: RememberMode = 'agent'
 export const MEMORY_STYLES = ['assistant', 'companion'] as const
 export type MemoryStyle = 'assistant' | 'companion'
 export const DEFAULT_MEMORY_STYLE: MemoryStyle = 'assistant'
+
+/**
+ * In `agent` mode, whether a substantive turn is submitted when the model did
+ * not remember anything itself.
+ *
+ * On by default: the failure this fixes is silent. A model deep in a document
+ * summary forgets the tool call, the user never learns nothing was stored, and
+ * the loss only shows up in a later session. The fallback is one extra governed
+ * request, which the server-side intent filter still judges.
+ */
+export const DEFAULT_FALLBACK_CAPTURE_ON_TURN_END = true
 
 /**
  * How long one core-anchor read is reused.
@@ -73,6 +84,7 @@ export function normalizeConfig(input: PluginConfig | undefined): ResolvedConfig
     recallLimit: clampInteger(config.recallLimit, DEFAULT_RECALL_LIMIT, 1, 20),
     autoRemember: config.autoRemember !== false,
     rememberMode: oneOf(config.rememberMode, REMEMBER_MODES, DEFAULT_REMEMBER_MODE),
+    fallbackCaptureOnTurnEnd: config.fallbackCaptureOnTurnEnd !== false,
     memoryStyle: oneOf(config.memoryStyle, MEMORY_STYLES, DEFAULT_MEMORY_STYLE),
     coreAnchorEnabled: config.coreAnchorEnabled !== false,
     coreAnchorLimit: clampInteger(config.coreAnchorLimit, DEFAULT_CORE_ANCHOR_LIMIT, 1, 12),

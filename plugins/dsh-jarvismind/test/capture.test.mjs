@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { CaptureQueue } from '../dist/capture.js'
+import { CaptureQueue, isSubstantive } from '../dist/capture.js'
 
 const config = {
   baseUrl: 'http://127.0.0.1:8777',
@@ -12,6 +12,7 @@ const config = {
   // These cases describe the original turn/end capture, which the `auto` and
   // `both` modes keep. The default `agent` mode is covered separately below.
   rememberMode: 'auto',
+  fallbackCaptureOnTurnEnd: true,
   memoryStyle: 'assistant',
   coreAnchorEnabled: true,
   coreAnchorLimit: 6,
@@ -48,6 +49,9 @@ test('turnEnded returns immediately and submits the user statement', async () =>
     conversationId: 's1',
     messageId: 'm1',
     turnId: '3',
+    // An automatic capture is a raw user statement, so the server's own intent
+    // and credential gates must judge it. Sent explicitly, not by default.
+    mode: 'auto',
   })
 
   const drained = capture.drain()
@@ -170,11 +174,11 @@ test('compactionStarted on an idle agent is a no-op', () => {
 // rememberMode
 // ---------------------------------------------------------------------------
 
-test('rememberMode=agent never captures a turn mechanically', async () => {
-  let calls = 0
+test('rememberMode=agent with the fallback still refuses a pleasantry or a one-word reply', async () => {
+  const calls = []
   const http = {
-    async remember() {
-      calls += 1
+    async remember(input) {
+      calls.push(input)
       return { status: 'SAVED' }
     },
   }
@@ -184,19 +188,163 @@ test('rememberMode=agent never captures a turn mechanically', async () => {
     { info() {}, warn() {}, debug() {} },
   )
 
-  // The noise this mode exists to filter: acknowledgements and a transient log.
+  // The noise the fallback exists to avoid: acknowledgements, punctuation and a
+  // single character state nothing, so they are never even offered to the server.
   capture.noteClaimed('a1', userMessage('m1', '嗯'), 1)
   capture.noteClaimed('a1', userMessage('m2', '谢谢'), 2)
-  capture.noteClaimed('a1', userMessage('m3', 'TypeError: undefined is not a function'), 3)
+  capture.noteClaimed('a1', userMessage('m3', '好的！'), 3)
+  capture.noteClaimed('a1', userMessage('m4', '。。。'), 4)
+  capture.noteClaimed('a1', userMessage('m5', 'ok'), 5)
   assert.equal(capture.pendingCount(), 0)
 
   capture.turnEnded('a1', 's1', 1)
   capture.turnEnded('a1', 's1', 2)
   capture.turnEnded('a1', 's1', 3)
+  capture.turnEnded('a1', 's1', 4)
+  capture.turnEnded('a1', 's1', 5)
   capture.compactionStarted('a1', 's1')
   await capture.drain()
 
-  assert.equal(calls, 0)
+  assert.equal(calls.length, 0)
+})
+
+test('rememberMode=agent submits a substantive turn when the model did not remember', async () => {
+  const calls = []
+  const http = {
+    async remember(input) {
+      calls.push(input)
+      return { status: 'NO_INTENT' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent' },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  capture.noteClaimed('a1', userMessage('m1', '用户平时在 Mac 上开发 JarvisMind。'), 1)
+  assert.equal(capture.pendingCount(), 1)
+
+  capture.turnEnded('a1', 's1', 1)
+  await capture.drain()
+
+  assert.equal(calls.length, 1)
+  // `auto`, not `direct`: the fallback is a raw user turn, so the server's own
+  // intent and credential gates must still judge it. It can legitimately answer
+  // NO_INTENT and store nothing.
+  assert.equal(calls[0].mode, 'auto')
+  assert.equal(calls[0].text, '用户平时在 Mac 上开发 JarvisMind。')
+})
+
+test('rememberMode=agent never duplicates a turn the model already remembered', async () => {
+  const calls = []
+  const http = {
+    async remember(input) {
+      calls.push(input)
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent' },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  capture.noteClaimed('a1', userMessage('m1', '用户希望被称呼为「年糕」'), 4)
+  // The model called jarvismind_remember during this turn.
+  capture.markRemembered('a1')
+  assert.equal(capture.pendingCount(), 1)
+
+  capture.turnEnded('a1', 's1', 4)
+  await capture.drain()
+
+  assert.equal(calls.length, 0, 'the fallback submitted a turn the model already remembered')
+  // The queued copy is discarded, not left to be flushed at compaction.
+  assert.equal(capture.pendingCount(), 0)
+})
+
+test('a remembered turn does not silence the next turn', async () => {
+  const calls = []
+  const http = {
+    async remember(input) {
+      calls.push(input)
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent' },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  capture.noteClaimed('a1', userMessage('m1', 'turn four'), 4)
+  capture.markRemembered('a1')
+  capture.turnEnded('a1', 's1', 4)
+  await capture.drain()
+  assert.equal(calls.length, 0)
+
+  // A later turn where the model said nothing must still use the fallback.
+  capture.noteClaimed('a1', userMessage('m2', '我下周去杭州出差'), 5)
+  capture.turnEnded('a1', 's1', 5)
+  await capture.drain()
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].text, '我下周去杭州出差')
+})
+
+test('fallbackCaptureOnTurnEnd=false restores pure model-decided capture', async () => {
+  const calls = []
+  const http = {
+    async remember(input) {
+      calls.push(input)
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent', fallbackCaptureOnTurnEnd: false },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  capture.noteClaimed('a1', userMessage('m1', '用户平时在 Mac 上开发 JarvisMind。'), 1)
+  assert.equal(capture.pendingCount(), 0)
+  capture.turnEnded('a1', 's1', 1)
+  capture.compactionStarted('a1', 's1')
+  await capture.drain()
+
+  assert.equal(calls.length, 0)
+})
+
+test('compaction/start drops a turn the model already remembered', async () => {
+  const calls = []
+  const http = {
+    async remember(input) {
+      calls.push(input)
+      return { status: 'SAVED' }
+    },
+  }
+  const capture = new CaptureQueue(
+    http,
+    { ...config, rememberMode: 'agent' },
+    { info() {}, warn() {}, debug() {} },
+  )
+
+  capture.noteClaimed('a1', userMessage('m1', '用户希望被称呼为「年糕」'), 2)
+  capture.markRemembered('a1')
+
+  capture.compactionStarted('a1', 's1')
+  await capture.drain()
+
+  assert.equal(calls.length, 0, 'compaction flushed a turn the model already remembered')
+  assert.equal(capture.pendingCount(), 0)
+})
+
+test('clear() forgets a disposed agent entirely', () => {
+  const http = { async remember() { return { status: 'SAVED' } } }
+  const capture = new CaptureQueue(http, { ...config, rememberMode: 'agent' }, { info() {}, warn() {}, debug() {} })
+  capture.noteClaimed('a1', userMessage('m1', '用户平时在 Mac 上开发 JarvisMind。'), 1)
+  assert.equal(capture.pendingCount(), 1)
+  capture.clear('a1')
+  assert.equal(capture.pendingCount(), 0)
 })
 
 test('rememberMode=both captures every turn and still leaves the tool available', async () => {
@@ -240,4 +388,18 @@ test('rememberMode=agent keeps autoRemember=false meaning no capture at all', ()
   capture.turnEnded('a1', 's1', 1)
   assert.equal(calls, 0)
   assert.equal(capture.pendingCount(), 0)
+})// ---------------------------------------------------------------------------
+// isSubstantive
+// ---------------------------------------------------------------------------
+
+test('isSubstantive keeps real statements and rejects only noise', () => {
+  // Real statements, including short ones.
+  for (const text of ['我叫年糕', '用户平时在 Mac 上开发 JarvisMind。', '我在写 Rust', '下周去杭州', '嗯，我叫年糕']) {
+    assert.equal(isSubstantive(text), true, `expected substantive: ${text}`)
+  }
+
+  // Acknowledgements, punctuation and whitespace carry no fact.
+  for (const text of ['', '   ', '嗯', '好', '好的', '好的！', '谢谢', '谢谢！', '收到', 'ok', 'OK', 'thanks', '。。。', '…', '👍', '👍👍']) {
+    assert.equal(isSubstantive(text), false, `expected noise: ${JSON.stringify(text)}`)
+  }
 })

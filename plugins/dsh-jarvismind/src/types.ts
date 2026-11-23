@@ -25,12 +25,21 @@ export interface PluginConfig {
    * Who decides what is worth remembering.
    *
    * - `agent` (default): the model calls `jarvismind_remember` when it judges a
-   *   statement worth keeping. No mechanical `turn/end` capture, so noise such
-   *   as "嗯" / "谢谢" / a transient error never becomes a candidate.
+   *   statement worth keeping. If it does not, the turn-end fallback below may
+   *   still submit a substantive user message once.
    * - `auto`: the original behavior, submitting every user turn after it ends.
    * - `both`: the model decides *and* every turn is submitted.
    */
   rememberMode?: 'agent' | 'auto' | 'both'
+  /**
+   * In `agent` mode, submit a substantive user turn at `turn/end` when the model
+   * did not call `jarvismind_remember` during that turn.
+   *
+   * It exists because a model absorbed in summarising a document can forget to
+   * call the tool. The fallback is skipped when the model did remember, and it
+   * never sends a pleasantry or a one-word reply.
+   */
+  fallbackCaptureOnTurnEnd?: boolean
   /** Which guidance the model receives about what to remember. */
   memoryStyle?: 'assistant' | 'companion'
   /** Inject the always-on `<jarvismind-core-anchor>` soul/relationship block. */
@@ -52,6 +61,7 @@ export interface ResolvedConfig {
   recallLimit: number
   autoRemember: boolean
   rememberMode: RememberMode
+  fallbackCaptureOnTurnEnd: boolean
   memoryStyle: MemoryStyle
   coreAnchorEnabled: boolean
   coreAnchorLimit: number

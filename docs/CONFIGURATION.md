@@ -62,6 +62,7 @@ Counters are kept per process in a sliding 60-second window. The response to a r
 | `JARVISMIND_EMBEDDING_PROVIDER` | `fastembed` | `fastembed`: semantic vectors from a local model, downloaded once on first use into `data/models`. `disabled`: no vectors, keyword search only. `deterministic`: local n-gram vectors with no model download, for offline use and tests. |
 | `JARVISMIND_EMBEDDING_MODEL` | `BAAI/bge-small-zh-v1.5` | Model name for `fastembed`. |
 | `JARVISMIND_EMBEDDING_DIMENSION` | `512` | Vector size, 1 to 8192. Must match the model. |
+| `JARVISMIND_WARMUP_EMBEDDING` | `1` | Load the embedding model in a daemon thread once `serve` is listening, so the first recall does not pay for a cold model load inside a request. Only `serve` starts it — tests and `create_app` never do. Set to `0` to disable; an offline machine, a missing cache or a provider that raises is logged once at debug level and ignored. |
 | `JARVISMIND_QDRANT_COLLECTION` | `memories` | Collection name in the local vector index. |
 | `JARVISMIND_QDRANT_PATH` | empty | Overrides the vector directory of the default space. Other spaces always use their own directory. |
 | `JARVISMIND_HYBRID_RRF_K` | `60` | Constant of reciprocal rank fusion, 1 to 1000. |

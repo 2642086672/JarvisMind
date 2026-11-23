@@ -293,7 +293,7 @@ Windows：
 | 工具 | 参数（默认值） | 服务端权限 | 返回 |
 | --- | --- | --- | --- |
 | `jarvismind_context` | `query` string 1–500（必填）；`limit` integer 1–20，默认 `6` | `context` | `<jarvismind-context trust="untrusted-data">` 块；有引用时追加 `{"citations":[...],"retrieval_version":...}` |
-| `jarvismind_remember` | `text` string 1–5000（必填）；`conversation_id` string 1–255（可选，缺省为进程级 `mcp-<12hex>`）；`mode` `auto` / `direct`，默认 `direct` | `write` + 空间 `readwrite` | 服务端 `data` JSON，`status` 原样呈现（`SAVED` / `DUPLICATE` / `PROTECTED` / `DENIED` / `UPDATED` / `CONFLICT` / `NO_MEMORY` / `NO_INTENT` / `FAILED`） |
+| `jarvismind_remember` | `text` string 1–5000（单条）；或 `items` string[] 最多 20 条（批量）；二者给一个，不能同时给；`conversation_id` string 1–255（可选，缺省为进程级 `mcp-<12hex>`）；`mode` `auto` / `direct`，默认 `direct` | `write` + 空间 `readwrite` | 单条：服务端 `data` JSON，`status` 原样呈现（`SAVED` / `DUPLICATE` / `PROTECTED` / `DENIED` / `UPDATED` / `CONFLICT` / `NO_MEMORY` / `NO_INTENT` / `FAILED`）。批量：`{"submitted","saved","duplicate","protected","denied","failed","other","results":[...]}`，有 `PROTECTED` 时附 `note` 说明需所有者在控制台批准 |
 | `jarvismind_search` | `query` string 1–500（必填）；`memory_type` 枚举（可选）；`limit` integer 1–50，默认 `10` | `search` | `{"query":...,"count":N,"memories":[...]}` |
 | `jarvismind_forget` | `memory_id` string 1–255（必填）；`reason` string 0–1000（可选） | `delete` + 空间 `readwrite` | 服务端请求 JSON + `note`：请求状态为 `PENDING`，必须由所有者在控制台批准；永不返回 `confirmation_token` |
 | `jarvismind_core_anchor` | `limit` integer 1–20，默认 `6`；`max_chars` integer 1–10000，默认 `500` | `read` | 仅核心锚点块本身 |
@@ -317,6 +317,22 @@ Windows：
 ```
 
 空结果也返回空包裹，便于客户端稳定注入。
+
+### 批量写入
+
+粘一份导出的记忆或背景档案时，用 `items` 一次提交，不必逐条调用：
+
+```json
+{"items": ["用户希望被称呼为「阿龙」", "用户从事客服质管与品质管理工作"], "mode": "direct"}
+```
+
+规则：
+
+1. **上限 20 条**，超出整批拒绝（`-32602`），不会分批偷偷发出去。
+2. **每条都是独立的 `POST /api/v1/agent/remember`**，因此凭据拦截、JMR 敏感治理与去重逐条生效，零 schema 改动、零绕过。
+3. **条目内重复会被合并**，空白条目直接丢弃。
+4. **单条失败不拖垮整批**：上游返回 5xx 的那一条记为 `FAILED`，其余照常写入。
+5. 结果里的 `protected` 计数大于 0 时会附带 `note`，明确指出这些记忆在控制台待审区、**尚未存储**，需所有者批准。
 
 ### Resource
 

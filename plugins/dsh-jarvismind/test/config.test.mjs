@@ -14,6 +14,14 @@ test('empty input yields the documented defaults', () => {
   assert.equal(config.coreAnchorLimit, DEFAULT_CORE_ANCHOR_LIMIT)
   assert.equal(config.coreAnchorMaxChars, DEFAULT_CORE_ANCHOR_MAX_CHARS)
   assert.equal(config.timeoutMs, DEFAULT_TIMEOUT_MS)
+  // The first request after a cold start can spend seconds loading the embedding
+  // model, so the default has to outlast that or the first turn loses its memory.
+  assert.equal(config.timeoutMs, 6000)
+  assert.equal(config.rememberMode, 'agent')
+  assert.equal(config.memoryStyle, 'assistant')
+  // The fallback is on by default: a model busy summarising a document forgets
+  // the tool call, and nothing else would notice.
+  assert.equal(config.fallbackCaptureOnTurnEnd, true)
 })
 
 test('baseUrl keeps a base path but drops credentials, query and trailing slashes', () => {
@@ -32,6 +40,8 @@ test('numeric bounds are clamped and booleans are strict', () => {
   assert.equal(normalizeConfig({ timeoutMs: 999_999 }).timeoutMs, 30_000)
   assert.equal(normalizeConfig({ autoRecall: false }).autoRecall, false)
   assert.equal(normalizeConfig({ autoRemember: false }).autoRemember, false)
+  assert.equal(normalizeConfig({ fallbackCaptureOnTurnEnd: false }).fallbackCaptureOnTurnEnd, false)
+  assert.equal(normalizeConfig({ fallbackCaptureOnTurnEnd: true }).fallbackCaptureOnTurnEnd, true)
 })
 
 test('core anchor bounds are clamped to the documented ranges', () => {

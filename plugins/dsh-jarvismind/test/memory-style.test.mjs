@@ -52,3 +52,15 @@ test('an unknown style falls back to the assistant guide', () => {
   assert.equal(memoryGuide('nonsense'), memoryGuide('assistant'))
   assert.equal(memoryGuide(undefined), memoryGuide('assistant'))
 })
+test('both styles store pasted material before summarising it', () => {
+  for (const style of ['assistant', 'companion']) {
+    const guide = memoryGuide(style)
+    // The gap this closes: a model asked to summarise an export answers and
+    // never stores anything, so the facts die with the context.
+    assert.match(guide, /self-introduction|exported memory|chat history export|background profile/i)
+    assert.match(guide, /jarvismind_remember/)
+    assert.match(guide, /items/)
+    assert.match(guide, /then write the summary|only then/i)
+    assert.match(guide, /do not wait/i)
+  }
+})

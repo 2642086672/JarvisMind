@@ -7,14 +7,17 @@ DSH Desktop profile. It connects every top-level conversation to a local
 - **recall** happens before the model answers: the current user message is sent to
   `POST /api/v1/agent/context` and the returned `<jarvismind-context>` block is added to
   the system prompt as read-only, untrusted reference data;
-- **capture** happens after the turn ends: user statements are submitted asynchronously
-  to `POST /api/v1/agent/remember`, where JMR decides whether they become memories;
+- **capture** happens after the turn ends: in the default `agent` mode the model
+  chooses what to store, with a turn-end fallback for the turns where it forgets;
+  whatever is sent goes to `POST /api/v1/agent/remember`, where JMR decides whether
+  it becomes a memory;
 - a **core anchor** is present on every step: the user's name, form of address, core
   preferences and standing agreements are read from `GET /api/v1/agent/memories` and
   injected as a `<jarvismind-core-anchor>` block, so the relationship survives context
   compaction and new sessions;
 - three native tools are available to the model: `jarvismind_search`,
-  `jarvismind_remember`, and `jarvismind_forget`.
+  `jarvismind_remember` (one statement, or up to 20 in a single `items` batch), and
+  `jarvismind_forget`.
 
 The plugin stores no memory of its own. Every read and write goes through the
 JarvisMind agent API and its governance rules. JarvisMind being down, slow, or
@@ -112,11 +115,12 @@ by targeting the row id `jarvismind` with a complete `config` object:
     recallLimit: 6
     autoRemember: true
     rememberMode: agent
+    fallbackCaptureOnTurnEnd: true
     memoryStyle: assistant
     coreAnchorEnabled: true
     coreAnchorLimit: 6
     coreAnchorMaxChars: 500
-    timeoutMs: 2500
+    timeoutMs: 6000
 ```
 
 | Field | Default | Meaning |
@@ -128,11 +132,12 @@ by targeting the row id `jarvismind` with a complete `config` object:
 | `recallLimit` | `6` | Memories requested per recall, clamped to 1–20. |
 | `autoRemember` | `true` | Submit user statements after each turn (only meaningful in `auto` mode). |
 | `rememberMode` | `agent` | How memories are selected: `agent`, `auto` or `both`. See below. |
+| `fallbackCaptureOnTurnEnd` | `true` | In `agent` mode, submit a substantive turn at `turn/end` when the model did not call the tool. |
 | `memoryStyle` | `assistant` | What the model is told is worth remembering: `assistant` or `companion`. |
 | `coreAnchorEnabled` | `true` | Inject the always-on `<jarvismind-core-anchor>` block. |
 | `coreAnchorLimit` | `6` | Memories kept in the anchor, clamped to 1–12. |
 | `coreAnchorMaxChars` | `500` | Characters kept per anchor memory, clamped to 100–2000. |
-| `timeoutMs` | `2500` | Per-request timeout, clamped to 200–30000 ms. |
+| `timeoutMs` | `6000` | Per-request timeout, clamped to 200–30000 ms. The first request after a cold start can spend seconds loading the embedding model, so the default outlasts that. |
 
 The token is read at request time, so rotating the file or the environment
 variable takes effect without reinstalling the plugin. The token is never
@@ -144,13 +149,27 @@ logged, printed, or returned in a tool result.
 
 | Value | Behavior |
 | --- | --- |
-| `agent` (default) | The model calls `jarvismind_remember` when something matters. Nothing is captured automatically. |
+| `agent` (default) | The model calls `jarvismind_remember` when something matters. If it does not, the turn-end fallback submits a substantive turn once. |
 | `auto` | Every user turn is submitted after `turn/end`. No tool guidance is injected. |
 | `both` | Both paths run. The model may add what the turn-level capture would miss. |
 
 The default changed from blind per-turn capture to the model's own judgement,
 because the turn-level path filed greetings and one-line acknowledgements as
-memories. Under `agent`, the tool's statement is sent with `mode: "direct"`: the
+memories.
+
+Model judgement alone has one failure mode worth covering: a model absorbed in
+summarising a pasted document forgets the tool call, the user never learns
+nothing was stored, and the loss only shows up in a later session. So `agent`
+mode keeps a **fallback**: when a turn ends and the model did not call
+`jarvismind_remember` during it, a substantive user message is submitted once
+with `mode: "auto"`. That means the server's own intent and credential gates
+still judge it, so a turn that is not really memorable comes back `NO_INTENT`
+and nothing is stored.
+
+The fallback is skipped when the model *did* call the tool that turn, so a
+statement is never sent twice, and it never offers a pleasantry or a one-character
+reply. Set `fallbackCaptureOnTurnEnd: false` to turn it off entirely and rely on
+the model alone. Under `agent`, the tool's statement is sent with `mode: "direct"`: the
 model has already decided, so the server's trigger-word heuristic is skipped and
 the memory is written immediately. The server still runs the full governance
 chain first — credential gate, sensitivity hold, de-duplication and the single
@@ -167,6 +186,13 @@ privileged one. It is also not an authentication shortcut.
 Both styles forbid credentials, and the brief is only injected in `agent` or
 `both` mode: in `auto` mode the turn-level capture already covers every turn, so
 advising the model to call the tool would only submit the same statement twice.
+
+Both styles also carry one shared rule: when the user pastes a self-introduction,
+an exported memory list, a chat-history export or a background profile — even if
+they only say "summarise this" — the model must first extract the durable facts
+and store them, and only then write the summary. Store-then-answer is stated as
+the order because the opposite order is what loses the facts: a summary in the
+chat is not a memory, and the pasted material is gone after compaction.
 
 Even in `direct` mode the server refuses statements that carry no fact. A message
 that is purely a pleasantry ("谢谢", "好的", "收到", "thanks") is rejected, and
@@ -220,8 +246,8 @@ cannot block or delay compaction.
 So the plugin does the only honest thing: on `compaction/start` it flushes any
 statement still queued for `/api/v1/agent/remember` as a fire-and-forget best
 effort, to shrink the window in which an un-sent statement would be summarised
-away. That flush only has work to do in `auto` or `both` mode, since `agent` mode
-never queues a turn. It does **not** claim a guarantee it cannot keep. Continuity
+away. A turn the model already remembered is dropped rather than sent twice. It
+does **not** claim a guarantee it cannot keep. Continuity
 after compaction rests on the always-present `<jarvismind-core-anchor>` and on the
 memory the model chose to record before the turn ended.
 

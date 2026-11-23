@@ -337,9 +337,14 @@ def test_initialize_tools_list_and_resources_list(stub):
 
     remember_tool = _tool_by_name(tools, "jarvismind_remember")
     remember_schema = remember_tool["inputSchema"]
-    assert remember_schema["required"] == ["text"]
+    # Either `text` or `items` is required, so neither can be listed as a single
+    # required field; the tool validates the pair itself.
+    assert remember_schema["required"] == []
     assert remember_schema["properties"]["mode"]["enum"] == ["auto", "direct"]
     assert remember_schema["properties"]["mode"]["default"] == "direct"
+    assert remember_schema["properties"]["items"]["type"] == "array"
+    assert remember_schema["properties"]["items"]["maxItems"] == 20
+    assert remember_schema["properties"]["items"]["items"]["type"] == "string"
 
     search_tool = _tool_by_name(tools, "jarvismind_search")
     assert set(search_tool["inputSchema"]["properties"]["memory_type"]["enum"]) == {
@@ -1171,3 +1176,114 @@ def test_redaction_helpers():
     assert "confirmation_token" not in stripped
     assert "plaintext_token" not in stripped
     assert stripped["token"] == FAKE_TOKEN
+
+
+def test_remember_batch_stores_items_and_reports_a_held_one(stub):
+    config = _config(stub)
+
+    def remember_override(record):
+        text = record["body"]["text"]
+        if "敏感" in text:
+            return 200, {"data": {"status": "PROTECTED", "reason": "sensitive"}}
+        return 200, {"data": {"status": "SAVED", "memory_id": f"mem-{len(text)}"}}
+
+    stub.overrides[("POST", REMEMBER_PATH)] = remember_override
+
+    result = _call_tool(
+        config,
+        "jarvismind_remember",
+        {
+            "items": [
+                "  用户喜欢绿茶  ",
+                "用户有一段敏感往事",
+                "",
+                "用户喜欢绿茶",
+            ],
+            "conversation_id": "conv-batch",
+        },
+    )
+    assert result["isError"] is False
+
+    # Whitespace is trimmed, the blank is dropped and the repeat is collapsed:
+    # a duplicate inside one batch is the caller repeating itself.
+    sent = [request for request in stub.requests if request["path"] == REMEMBER_PATH]
+    assert [request["body"]["text"] for request in sent] == [
+        "用户喜欢绿茶",
+        "用户有一段敏感往事",
+    ]
+    assert all(request["body"]["mode"] == "direct" for request in sent)
+    assert all(request["body"]["conversation_id"] == "conv-batch" for request in sent)
+
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["submitted"] == 2
+    assert payload["saved"] == 1
+    assert payload["protected"] == 1
+    assert payload["denied"] == 0
+    assert payload["failed"] == 0
+    # The model must be told where a held item went, not just that it "worked".
+    assert "pending-review area" in payload["note"]
+    assert "owner must approve" in payload["note"]
+    assert payload["results"][1]["status"] == "PROTECTED"
+
+
+def test_remember_batch_cap_and_mutual_exclusion_are_errors(stub):
+    config = _config(stub)
+
+    too_many = [f"事实 {index}" for index in range(21)]
+    responses, _output, _stderr = _run(
+        config,
+        [
+            _tool_call("jarvismind_remember", {"items": too_many}, 1),
+            _tool_call(
+                "jarvismind_remember",
+                {"text": "one", "items": ["two"]},
+                2,
+            ),
+            _tool_call("jarvismind_remember", {}, 3),
+            _tool_call("jarvismind_remember", {"items": []}, 4),
+        ],
+    )
+    codes = [response["error"]["code"] for response in responses]
+    assert codes == [-32602, -32602, -32602, -32602]
+    assert "exceeds the limit of 20" in responses[0]["error"]["message"]
+    assert "not both" in responses[1]["error"]["message"]
+    assert "either 'text' or 'items'" in responses[2]["error"]["message"]
+
+    # None of the rejected calls reached the service.
+    assert [request for request in stub.requests if request["path"] == REMEMBER_PATH] == []
+
+
+def test_remember_batch_continues_after_an_upstream_failure(stub):
+    config = _config(stub)
+    calls = {"count": 0}
+
+    def flaky_override(record):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            return 500, {"error": {"code": "internal_error", "message": "boom"}}
+        return 200, {"data": {"status": "SAVED", "memory_id": "mem-ok"}}
+
+    stub.overrides[("POST", REMEMBER_PATH)] = flaky_override
+
+    result = _call_tool(
+        config,
+        "jarvismind_remember",
+        {"items": ["first fact", "second fact", "third fact"]},
+    )
+    assert result["isError"] is False
+
+    payload = json.loads(result["content"][0]["text"])
+    # A single unreachable item must not discard the results of the others.
+    assert payload["saved"] == 2
+    assert payload["failed"] == 1
+    assert payload["submitted"] == 3
+    assert payload["results"][1]["status"] == "FAILED"
+
+
+def test_remember_single_text_still_works(stub):
+    config = _config(stub)
+    result = _call_tool(config, "jarvismind_remember", {"text": "I live in Berlin"})
+    assert result["isError"] is False
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["status"] == "SAVED"
+    assert stub.requests[-1]["body"]["text"] == "I live in Berlin"

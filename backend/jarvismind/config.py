@@ -97,6 +97,12 @@ class Settings:
     embedding_provider: str = "fastembed"
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
     embedding_dimension: int = 512
+    #: Load the embedding model into memory in a background thread once the
+    #: server is listening. The first recall after a cold start otherwise pays
+    #: that cost inside a request, which can exceed a client's timeout and look
+    #: like memory that was never stored. Only the ``serve`` command starts it,
+    #: so tests (which build the app through ``create_app``) never trigger it.
+    warmup_embedding: bool = True
     hybrid_rrf_k: int = 60
     hybrid_vector_weight: float = 1.0
     hybrid_fts_weight: float = 1.0
@@ -285,6 +291,7 @@ def load_settings() -> Settings:
         embedding_provider=_env_str("JARVISMIND_EMBEDDING_PROVIDER", "fastembed"),
         embedding_model=_env_str("JARVISMIND_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"),
         embedding_dimension=_env_int("JARVISMIND_EMBEDDING_DIMENSION", 512, 1, 8192),
+        warmup_embedding=_env_bool("JARVISMIND_WARMUP_EMBEDDING", True),
         hybrid_rrf_k=_env_int("JARVISMIND_HYBRID_RRF_K", 60, 1, 1000),
         hybrid_vector_weight=_env_float("JARVISMIND_HYBRID_VECTOR_WEIGHT", 1.0, minimum=0.0),
         hybrid_fts_weight=_env_float("JARVISMIND_HYBRID_FTS_WEIGHT", 1.0, minimum=0.0),

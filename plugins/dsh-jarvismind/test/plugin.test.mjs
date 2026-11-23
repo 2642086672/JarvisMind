@@ -143,7 +143,14 @@ async function startServer() {
           data: [{ memory_id: 'mem_1', content: '用户喜欢年糕', memory_type: 'preference', importance: 0.9 }],
         })
       } else if (url === '/api/v1/agent/remember') {
-        send(200, { data: { status: 'SAVED', memory_id: 'mem_2' } })
+        const parsed = body.length === 0 ? {} : JSON.parse(body)
+        // One designated phrase stands in for a sensitive fact so the batch
+        // summary can be exercised without a live JMR review queue.
+        if (typeof parsed.text === 'string' && parsed.text.includes('敏感')) {
+          send(200, { data: { status: 'PROTECTED', memory_id: 'mem_held' } })
+        } else {
+          send(200, { data: { status: 'SAVED', memory_id: 'mem_2' } })
+        }
         rememberResolve()
       } else if (url.startsWith('/api/v1/agent/memories/') && url.endsWith('/forget-requests')) {
         send(200, { data: { id: 'req_1', memory_id: 'mem_1', status: 'PENDING' } })
@@ -259,6 +266,7 @@ test('recall, capture and the three tools work against a live HTTP server', asyn
       conversation_id: 'a1',
       message_id: 'm1',
       turn_id: '1',
+      mode: 'auto',
     })
 
     // Explicit tools share the same client and governance endpoints.
@@ -348,6 +356,7 @@ test('compaction/start flushes queued statements before the summary is written',
       conversation_id: 'a3',
       message_id: 'mc1',
       turn_id: '5',
+      mode: 'auto',
     })
   } finally {
     delete process.env.JM_PLUGIN_TEST_TOKEN
@@ -468,6 +477,188 @@ test('unloading the plugin clears the anchor cache and tears down cleanly', asyn
     const secondAssemble = fresh.listeners.get('system-prompt/assemble')[0]
     await secondAssemble(assembly, { agent: fresh }, async () => assembly)
     assert.equal(anchorReads(), perRead * 2)
+  } finally {
+    delete process.env.JM_PLUGIN_TEST_TOKEN
+    await server.close()
+  }
+})// ---------------------------------------------------------------------------
+// model-first capture with a turn-end fallback
+// ---------------------------------------------------------------------------
+
+test('agent mode falls back to turn/end only when the model did not remember', async () => {
+  process.env.JM_PLUGIN_TEST_TOKEN = TOKEN
+  const server = await startServer()
+  try {
+    const agent = createFakeAgent('a6')
+    const { ctx, tools } = createFakeContext([agent])
+
+    plugin.apply(ctx, {
+      baseUrl: server.url,
+      tokenEnv: 'JM_PLUGIN_TEST_TOKEN',
+      timeoutMs: 1000,
+      autoRecall: false,
+      // The default. No `rememberMode` is passed on purpose: the fallback is
+      // part of the default behavior now.
+    })
+
+    const remembers = () => server.requests.filter((request) => request.url === '/api/v1/agent/remember')
+
+    // Turn 1: the model stays silent, so the substantive turn is submitted once.
+    agent.emit('agent/inbox/claimed', {
+      message: userMessage('f1', '用户平时在 Mac 上开发 JarvisMind。'),
+      turn: 1,
+    })
+    ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 1 } })
+    await withTimeout(server.rememberSeen, 'the turn/end fallback request')
+
+    assert.equal(remembers().length, 1)
+    assert.equal(JSON.parse(remembers()[0].body).mode, 'auto', 'the fallback must let the server judge it')
+
+    // Turn 2: the model calls the tool, so the fallback must not submit again.
+    agent.emit('agent/inbox/claimed', {
+      message: userMessage('f2', '用户希望被称呼为「年糕」'),
+      turn: 2,
+    })
+    const rememberTool = tools.find((tool) => tool.name === 'jarvismind_remember')
+    const toolResult = await rememberTool.execute({ text: '用户希望被称呼为「年糕」' }, { agent })
+    assert.match(toolResult, /SAVED/)
+
+    ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 2 } })
+    // Give a wrongly-scheduled fallback time to appear before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const after = remembers()
+    assert.equal(after.length, 2, 'the model-remembered turn was submitted twice')
+    assert.equal(JSON.parse(after[1].body).mode, 'direct')
+    assert.equal(
+      after.filter((request) => JSON.parse(request.body).mode === 'auto').length,
+      1,
+      'the fallback ran for a turn the model already remembered',
+    )
+  } finally {
+    delete process.env.JM_PLUGIN_TEST_TOKEN
+    await server.close()
+  }
+})
+
+test('fallbackCaptureOnTurnEnd=false leaves the turn to the model', async () => {
+  process.env.JM_PLUGIN_TEST_TOKEN = TOKEN
+  const server = await startServer()
+  try {
+    const agent = createFakeAgent('a7')
+    const { ctx } = createFakeContext([agent])
+
+    plugin.apply(ctx, {
+      baseUrl: server.url,
+      tokenEnv: 'JM_PLUGIN_TEST_TOKEN',
+      timeoutMs: 1000,
+      autoRecall: false,
+      fallbackCaptureOnTurnEnd: false,
+    })
+
+    agent.emit('agent/inbox/claimed', {
+      message: userMessage('f3', '用户平时在 Mac 上开发 JarvisMind。'),
+      turn: 1,
+    })
+    ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 1 } })
+    await new Promise((resolve) => setTimeout(resolve, 120))
+
+    assert.equal(server.requests.filter((request) => request.url === '/api/v1/agent/remember').length, 0)
+  } finally {
+    delete process.env.JM_PLUGIN_TEST_TOKEN
+    await server.close()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// batch items
+// ---------------------------------------------------------------------------
+
+test('jarvismind_remember stores a batch and reports a held item', async () => {
+  process.env.JM_PLUGIN_TEST_TOKEN = TOKEN
+  const server = await startServer()
+  try {
+    const agent = createFakeAgent('a8')
+    const { ctx, tools } = createFakeContext([agent])
+
+    plugin.apply(ctx, {
+      baseUrl: server.url,
+      tokenEnv: 'JM_PLUGIN_TEST_TOKEN',
+      timeoutMs: 1000,
+      autoRecall: false,
+    })
+
+    const rememberTool = tools.find((tool) => tool.name === 'jarvismind_remember')
+    const itemsSpec = rememberTool.parameters.items
+    assert.equal(itemsSpec.type, 'array', 'the tool must advertise a batch parameter')
+    assert.equal(itemsSpec.items.type, 'string')
+
+    const result = await rememberTool.execute(
+      { items: ['用户喜欢绿茶', '用户有一段敏感往事', '用户喜欢绿茶'] },
+      { agent },
+    )
+
+    // The duplicate inside one batch is collapsed, so only two requests go out.
+    const sent = server.requests.filter((request) => request.url === '/api/v1/agent/remember')
+    assert.equal(sent.length, 2)
+    for (const request of sent) assert.equal(JSON.parse(request.body).mode, 'direct')
+
+    assert.match(result, /2 submitted/)
+    assert.match(result, /saved 1/)
+    assert.match(result, /protected 1/)
+    // The model is told the truth about where the held item is.
+    assert.match(result, /owner must approve/)
+    assert.match(result, /pending-review area/)
+  } finally {
+    delete process.env.JM_PLUGIN_TEST_TOKEN
+    await server.close()
+  }
+})
+
+test('a batch over 20 items is refused instead of hammering the server', async () => {
+  process.env.JM_PLUGIN_TEST_TOKEN = TOKEN
+  const server = await startServer()
+  try {
+    const agent = createFakeAgent('a9')
+    const { ctx, tools } = createFakeContext([agent])
+
+    plugin.apply(ctx, {
+      baseUrl: server.url,
+      tokenEnv: 'JM_PLUGIN_TEST_TOKEN',
+      timeoutMs: 1000,
+      autoRecall: false,
+    })
+
+    const rememberTool = tools.find((tool) => tool.name === 'jarvismind_remember')
+    const tooMany = Array.from({ length: 21 }, (_value, index) => `事实 ${index + 1}`)
+    const result = await rememberTool.execute({ items: tooMany }, { agent })
+
+    assert.match(result, /exceeds the limit of 20/)
+    assert.equal(server.requests.filter((request) => request.url === '/api/v1/agent/remember').length, 0)
+  } finally {
+    delete process.env.JM_PLUGIN_TEST_TOKEN
+    await server.close()
+  }
+})
+
+test('text and items are mutually exclusive, and empty input is refused', async () => {
+  process.env.JM_PLUGIN_TEST_TOKEN = TOKEN
+  const server = await startServer()
+  try {
+    const agent = createFakeAgent('a10')
+    const { ctx, tools } = createFakeContext([agent])
+
+    plugin.apply(ctx, {
+      baseUrl: server.url,
+      tokenEnv: 'JM_PLUGIN_TEST_TOKEN',
+      timeoutMs: 1000,
+      autoRecall: false,
+    })
+
+    const rememberTool = tools.find((tool) => tool.name === 'jarvismind_remember')
+    assert.match(await rememberTool.execute({ text: '用户喜欢绿茶', items: ['用户喜欢绿茶'] }, { agent }), /not both/)
+    assert.match(await rememberTool.execute({}, { agent }), /either "text" or "items"/)
+    assert.equal(server.requests.filter((request) => request.url === '/api/v1/agent/remember').length, 0)
   } finally {
     delete process.env.JM_PLUGIN_TEST_TOKEN
     await server.close()

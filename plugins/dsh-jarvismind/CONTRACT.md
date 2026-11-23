@@ -122,6 +122,26 @@ it uses the same documented agent surface as the tools:
   standing agreement or a shared reference. That description, plus the
   `memoryStyle` brief injected by this plugin, is the entire mechanism behind
   `rememberMode: agent`.
+- `parameters` accepts `type: "array"` with an `items` sub-schema, but the
+  authoring DSL does **not** allow `maxItems` (only `description`, `title`,
+  `default`, `examples`, `required`, `type`, `enum`, `const`, `items`,
+  `properties`, `additionalProperties` and `oneOf`). The 20-statement cap on
+  `jarvismind_remember` is therefore enforced in `execute`, not by the schema; the
+  schema advertises `items` as an array and the description states the limit.
+
+### Turn-end fallback
+
+There is no "model forgot to call the tool" signal in DSH, so the plugin derives
+one. `agent/inbox/claimed` reports the turn number, `turn/end` closes it, and the
+plugin records whether `jarvismind_remember` ran in between:
+
+- `markRemembered` is called from the tool's `execute`, before the HTTP request,
+  so a failed call still counts as "the model decided" and is not also submitted
+  raw.
+- The marker is per turn, not per agent, so a remembered turn cannot silence the
+  next one.
+- It is consumed at `turn/end` and dropped on `compaction/start` without being
+  sent.
 
 ### Writing through the agent API
 
@@ -138,6 +158,13 @@ credential gate, the JMR sensitivity hold, de-duplication and the single
 authoritative write all still run; a credential is still refused, a sensitive
 personal fact still waits for approval, and a duplicate is still dropped.
 Nothing about authentication changes either.
+
+The turn-end fallback sends `mode: "auto"` explicitly rather than omitting the
+field, even though omission means the same thing today. The fallback is a raw
+user turn, so the server's heuristics must judge it, and stating that at the call
+site keeps the intent from silently changing if the server default ever does.
+A batch (`items`) sends each statement as its own request, so every entry is
+judged on its own; one `PROTECTED` result does not stop the rest.
 
 Because `direct` does not judge whether a statement is worth keeping, the plugin
 only sends what the model chose to send, and the server still refuses a message

@@ -48,7 +48,22 @@ export const COMPANION_MEMORY_GUIDE = [
   'Never record: meaningless pleasantries, transient errors, or any password, API key, token or private key.',
 ].join('\n')
 
+/**
+ * The rule that closes the "too busy summarising" gap.
+ *
+ * A model handed a long export focuses on the summary and forgets the tool
+ * call, so the facts are never stored. Stating the order explicitly — store,
+ * then answer — turns that from a judgement call into a step. It applies to
+ * both styles because the failure is about task focus, not about tone.
+ */
+export const BULK_MATERIAL_RULE = [
+  'When the user pastes a self-introduction, an exported memory list, a chat history export, or any explicit background profile — even when they only say "summarise this" or "organise this" — first extract the durable long-term facts and store them with jarvismind_remember (use its items batch when there are several), and only then write the summary.',
+  'Doing it in that order is required: a summary in the chat is not a memory, and the pasted material will be gone after the context is compacted.',
+  'Do not wait for a second instruction and do not wait for the user to say "remember this".',
+].join('\n')
+
 /** The guide for one style. */
 export function memoryGuide(style: MemoryStyle | undefined): string {
-  return style === 'companion' ? COMPANION_MEMORY_GUIDE : ASSISTANT_MEMORY_GUIDE
+  const base = style === 'companion' ? COMPANION_MEMORY_GUIDE : ASSISTANT_MEMORY_GUIDE
+  return `${base}\n${BULK_MATERIAL_RULE}`
 }

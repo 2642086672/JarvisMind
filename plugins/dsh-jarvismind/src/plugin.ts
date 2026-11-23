@@ -40,6 +40,7 @@ export const Config = z.object({
   recallLimit: z.number().default(DEFAULT_RECALL_LIMIT),
   autoRemember: z.boolean().default(true),
   rememberMode: z.union([...REMEMBER_MODES]).default(DEFAULT_REMEMBER_MODE),
+  fallbackCaptureOnTurnEnd: z.boolean().default(true),
   memoryStyle: z.union([...MEMORY_STYLES]).default(DEFAULT_MEMORY_STYLE),
   coreAnchorEnabled: z.boolean().default(true),
   coreAnchorLimit: z.number().default(DEFAULT_CORE_ANCHOR_LIMIT),
@@ -183,6 +184,7 @@ export function apply(ctx: PluginContext, rawConfig?: PluginConfig): void {
     disposers.delete(agent.id)
     agentsBySession.delete(agent.session.id)
     recall.clear(agent.id)
+    capture.clear(agent.id)
     dispose?.()
   }
 
@@ -229,7 +231,15 @@ export function apply(ctx: PluginContext, rawConfig?: PluginConfig): void {
   // and capture, and the tool fiber activates as soon as the service appears.
   ctx.inject(['tools'], (toolCtx: PluginContext) => {
     toolCtx.effect(() => {
-      const toolDisposers = createJarvisMindTools(http, config).map((definition) => toolCtx.tools.register(definition))
+      const toolDisposers = createJarvisMindTools(http, config, {
+        // The model decided for this turn. The turn-end fallback must not then
+        // submit the same turn as well; the queue records it per turn.
+        onRemembered: (sessionId) => {
+          if (sessionId === undefined) return
+          const agent = agentsBySession.get(sessionId)
+          if (agent !== undefined) capture.markRemembered(agent.id)
+        },
+      }).map((definition) => toolCtx.tools.register(definition))
       return () => {
         for (const dispose of toolDisposers) dispose()
       }
@@ -237,7 +247,7 @@ export function apply(ctx: PluginContext, rawConfig?: PluginConfig): void {
   })
 
   ctx.logger.info(
-    `jarvismind: ready (autoRecall=${config.autoRecall}, autoRemember=${config.autoRemember}, baseUrl=${publicUrl(config.baseUrl)})`,
+    `jarvismind: ready (autoRecall=${config.autoRecall}, rememberMode=${config.rememberMode}, fallbackCapture=${config.fallbackCaptureOnTurnEnd}, memoryStyle=${config.memoryStyle}, baseUrl=${publicUrl(config.baseUrl)})`,
   )
   if (resolveToken(config) === undefined) {
     ctx.logger.warn(

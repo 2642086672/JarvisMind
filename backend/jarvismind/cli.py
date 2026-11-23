@@ -58,6 +58,7 @@ def _serve(settings: Settings) -> int:
 
     from .core.logging import configure_logging
     from .main import create_app
+    from .warmup import start_embedding_warmup
 
     if not settings.database_path.is_file():
         print(
@@ -66,12 +67,28 @@ def _serve(settings: Settings) -> int:
         )
         return 2
     configure_logging(settings.log_level, settings.api_token)
-    uvicorn.run(
-        create_app(settings),
+    app = create_app(settings)
+
+    class _WarmupServer(uvicorn.Server):
+        """A uvicorn server that warms the embedding model once it listens.
+
+        ``startup()`` completes after the sockets are bound and the lifespan has
+        run, which is exactly "the service is ready". The warm-up is a daemon
+        thread that is never joined, so it cannot delay accepting requests; the
+        override exists only to pick the right moment, not to wait for the work.
+        """
+
+        async def startup(self, sockets=None) -> None:  # type: ignore[override]
+            await super().startup(sockets=sockets)
+            start_embedding_warmup(app.state.container, settings)
+
+    config = uvicorn.Config(
+        app,
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level.lower(),
     )
+    _WarmupServer(config).run()
     return 0
 
 

@@ -39,6 +39,11 @@ FORGET_NOTE = (
 
 MAX_LIST_PAGE_SIZE = 100
 
+#: Hard cap on one ``jarvismind_remember`` batch. Each entry is a separate
+#: governed request, so the cap bounds both latency and the blast radius of a
+#: bad export.
+MAX_REMEMBER_BATCH = 20
+
 
 class ToolArgumentError(ValueError):
     """Invalid tool arguments.  Safe to show to the caller."""
@@ -76,9 +81,11 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "name": "jarvismind_remember",
         "description": (
-            "Submit a statement to JarvisMind as a possible memory. The service runs its "
+            "Submit statements to JarvisMind as possible memories. The service runs its "
             "own credential gate, sensitivity review and de-duplication, and returns the "
-            "authoritative status. Requires 'write' permission and readwrite space access."
+            "authoritative status. Pass one statement in 'text' or several in 'items' "
+            f"(maximum {MAX_REMEMBER_BATCH}). Requires 'write' permission and readwrite "
+            "space access."
         ),
         "inputSchema": {
             "type": "object",
@@ -87,7 +94,16 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 5000,
-                    "description": "The statement to remember.",
+                    "description": "One statement to remember. Use either text or items.",
+                },
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 5000},
+                    "maxItems": MAX_REMEMBER_BATCH,
+                    "description": (
+                        "Several statements to store in one call "
+                        f"(maximum {MAX_REMEMBER_BATCH}). Use either text or items."
+                    ),
                 },
                 "conversation_id": {
                     "type": "string",
@@ -102,7 +118,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     "description": "direct skips only the intent-word filter; every governance gate still runs.",
                 },
             },
-            "required": ["text"],
+            "required": [],
             "additionalProperties": False,
         },
     },
@@ -416,23 +432,121 @@ def _tool_context(arguments: Dict[str, Any], client: AgentApiClient) -> Dict[str
     return _text_result(text)
 
 
+def _normalise_batch(items: Any) -> List[str]:
+    """Trim, drop blanks, collapse exact repeats and enforce the cap.
+
+    A repeat inside one batch is the caller repeating itself, not a new fact, so
+    it is collapsed rather than sent twice and reported as a duplicate.
+    """
+    if not isinstance(items, list):
+        raise ToolArgumentError("'items' must be an array of strings")
+    cleaned: List[str] = []
+    seen = set()
+    for entry in items:
+        if not isinstance(entry, str):
+            raise ToolArgumentError("every entry in 'items' must be a string")
+        value = entry.strip()
+        if not value:
+            continue
+        if len(value) > 5000:
+            raise ToolArgumentError("an entry in 'items' exceeds 5000 characters")
+        if value in seen:
+            continue
+        seen.add(value)
+        cleaned.append(value)
+    if not cleaned:
+        raise ToolArgumentError("'items' contained no non-empty statement")
+    if len(cleaned) > MAX_REMEMBER_BATCH:
+        raise ToolArgumentError(
+            f"'items' has {len(cleaned)} entries, which exceeds the limit of "
+            f"{MAX_REMEMBER_BATCH}; split it into smaller batches"
+        )
+    return cleaned
+
+
+def _render_batch(outcomes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarise a batch receipt.
+
+    Counts are what a model needs to decide whether to retry; the per-item rows
+    are what let it tell the user which statements were held for review.
+    """
+    counts: Dict[str, int] = {}
+    for outcome in outcomes:
+        status = str(outcome["status"])
+        counts[status] = counts.get(status, 0) + 1
+
+    def count(status: str) -> int:
+        return counts.get(status, 0)
+
+    saved = count("SAVED") + count("UPDATED")
+    protected = count("PROTECTED")
+    other = count("CONFLICT") + count("NO_MEMORY") + count("NO_INTENT")
+    summary = {
+        "submitted": len(outcomes),
+        "saved": saved,
+        "duplicate": count("DUPLICATE"),
+        "protected": protected,
+        "denied": count("DENIED"),
+        "failed": count("FAILED"),
+        "other": other,
+        "results": outcomes,
+    }
+    if protected > 0:
+        summary["note"] = (
+            f"{protected} sensitive "
+            f"{'memory is' if protected == 1 else 'memories are'} held in the "
+            "JarvisMind console's pending-review area and not stored yet; the "
+            "owner must approve " + ("it" if protected == 1 else "them") + "."
+        )
+    return summary
+
+
 def _tool_remember(
     arguments: Dict[str, Any],
     client: AgentApiClient,
     default_conversation_id: str,
 ) -> Dict[str, Any]:
-    _check_keys(arguments, ("text", "conversation_id", "mode"))
-    text_value = _required_string(arguments, "text", min_length=1, max_length=5000)
+    _check_keys(arguments, ("text", "items", "conversation_id", "mode"))
+    has_text = arguments.get("text") is not None
+    has_items = arguments.get("items") is not None
+    if not has_text and not has_items:
+        raise ToolArgumentError("provide either 'text' or 'items'")
+    if has_text and has_items:
+        raise ToolArgumentError("provide either 'text' or 'items', not both")
+
     conversation_id = _string_arg(
         arguments, "conversation_id", required=False, min_length=1, max_length=255
     )
     mode = _enum_arg(arguments, "mode", default="direct", allowed=("auto", "direct"))
-    data = client.remember(
-        text_value,
-        conversation_id or default_conversation_id,
-        mode or "direct",
-    )
-    return _text_result(_json_text(data))
+    target = conversation_id or default_conversation_id
+
+    if has_text:
+        text_value = _required_string(arguments, "text", min_length=1, max_length=5000)
+        data = client.remember(text_value, target, mode or "direct")
+        return _text_result(_json_text(data))
+
+    batch = _normalise_batch(arguments.get("items"))
+    outcomes: List[Dict[str, Any]] = []
+    for index, statement in enumerate(batch):
+        try:
+            data = client.remember(statement, target, mode or "direct")
+            outcomes.append(
+                {
+                    "index": index + 1,
+                    "status": str(data.get("status", "UNKNOWN")),
+                    "memory_id": data.get("memory_id"),
+                }
+            )
+        except MCPUpstreamError as exc:
+            # One unreachable item must not discard the results of the others.
+            outcomes.append(
+                {
+                    "index": index + 1,
+                    "status": "FAILED",
+                    "error": exc.code or "upstream_error",
+                }
+            )
+    return _text_result(_json_text(_render_batch(outcomes)))
 
 
 def _tool_search(arguments: Dict[str, Any], client: AgentApiClient) -> Dict[str, Any]:
@@ -505,6 +619,7 @@ def call_tool(
 __all__ = [
     "CORE_ANCHOR_URI",
     "FORGET_NOTE",
+    "MAX_REMEMBER_BATCH",
     "TOOL_DEFINITIONS",
     "TOOL_NAMES",
     "MCPUpstreamError",

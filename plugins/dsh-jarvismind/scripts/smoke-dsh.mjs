@@ -176,7 +176,12 @@ async function startStub() {
           }),
         )
       } else if (url === '/api/v1/agent/remember') {
-        response.end(JSON.stringify({ data: { status: 'SAVED', memory_id: 'mem_1' } }))
+        const parsed = body.length === 0 ? {} : JSON.parse(body)
+        if (typeof parsed.text === 'string' && parsed.text.includes('敏感')) {
+          response.end(JSON.stringify({ data: { status: 'PROTECTED', memory_id: 'mem_held' } }))
+        } else {
+          response.end(JSON.stringify({ data: { status: 'SAVED', memory_id: 'mem_1' } }))
+        }
         resolveRemember()
       } else {
         response.end(JSON.stringify({ data: [] }))
@@ -237,26 +242,37 @@ assert.ok(!anchor.text.includes('tea'), 'anchor repeated a recalled memory')
 assert.equal(assembled.sections[3].name, 'jarvismind:context')
 assert.match(assembled.sections[3].text, /untrusted data/)
 
-// Real DSH accepted the Config schema, including the three new anchor keys.
+// Real DSH accepted the Config schema, including the anchor keys and the new
+// turn-end fallback switch.
 assert.ok(plugin.Config, 'Config was not exported')
 const resolved = plugin.Config({})
 assert.equal(resolved.coreAnchorEnabled, true, 'coreAnchorEnabled default')
 assert.equal(resolved.coreAnchorLimit, 6, 'coreAnchorLimit default')
 assert.equal(resolved.coreAnchorMaxChars, 500, 'coreAnchorMaxChars default')
+assert.equal(resolved.fallbackCaptureOnTurnEnd, true, 'fallbackCaptureOnTurnEnd default')
 
-// In the default `agent` mode a turn ending must NOT submit anything by itself:
-// submitting every turn is what used to file "嗯" and "谢谢" as memory
-// candidates. The model calls the tool instead.
+const remembers = () => stub.requests.filter((request) => request.url === '/api/v1/agent/remember')
+
+// Turn 1: the model stayed silent, so the fallback submits the substantive turn
+// once — with `mode: "auto"`, because a raw user turn must still face the
+// server's own intent and credential gates.
 ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 1 } })
-await new Promise((resolve) => setTimeout(resolve, 100))
-assert.ok(
-  !stub.requests.some((request) => request.url === '/api/v1/agent/remember'),
-  'a turn was captured automatically in agent mode',
-)
+await stub.rememberSeen
+assert.equal(remembers().length, 1, 'the turn/end fallback did not submit')
+assert.equal(JSON.parse(remembers()[0].body).mode, 'auto', 'the fallback must let the server judge it')
 
-// The model's own decision goes through the tool, and it must be sent as
-// `mode: "direct"`: the model has judged it worth keeping, so the server should
-// not re-apply its trigger-word heuristic. Governance still runs server-side.
+// Turn 2: the model's own decision goes through the tool, as `mode: "direct"`:
+// the model has judged it worth keeping, so the trigger-word heuristic is skipped.
+// Governance still runs server-side.
+agent.emit('agent/inbox/claimed', {
+  message: {
+    id: 'm2',
+    role: 'user',
+    content: [{ type: 'text', text: '用户希望被称呼为「年糕」' }],
+    source: { kind: 'user' },
+  },
+  turn: 2,
+})
 const rememberTool = tools.find((tool) => tool.name === 'jarvismind_remember')
 assert.ok(rememberTool, 'jarvismind_remember was not registered')
 const toolResult = await rememberTool.execute(
@@ -264,12 +280,31 @@ const toolResult = await rememberTool.execute(
   { agent, signal: undefined },
 )
 assert.equal(typeof toolResult, 'string', 'tool did not return a rendered string')
-await stub.rememberSeen
-const remember = stub.requests.find((request) => request.url === '/api/v1/agent/remember')
-assert.ok(remember, 'remember request was not sent')
-const rememberBody = JSON.parse(remember.body)
-assert.equal(rememberBody.text, '用户希望被称呼为「年糕」')
-assert.equal(rememberBody.mode, 'direct', 'the tool must send mode=direct in agent mode')
+assert.match(toolResult, /SAVED/)
+
+// The model remembered, so `turn/end` must not submit the same turn again.
+ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn: 2 } })
+await new Promise((resolve) => setTimeout(resolve, 120))
+assert.equal(remembers().length, 2, 'a model-remembered turn was submitted twice')
+assert.equal(
+  remembers().filter((request) => JSON.parse(request.body).mode === 'auto').length,
+  1,
+  'the fallback ran for a turn the model already remembered',
+)
+
+// A batch sends one governed request per statement and reports a held one.
+agent.emit('agent/inbox/claimed', {
+  message: { id: 'm3', role: 'user', content: [{ type: 'text', text: '整理一下我的资料' }], source: { kind: 'user' } },
+  turn: 3,
+})
+const batchResult = await rememberTool.execute(
+  { items: ['用户喜欢绿茶', '用户有一段敏感往事'] },
+  { agent, signal: undefined },
+)
+assert.match(batchResult, /2 submitted/, 'the batch summary is missing')
+assert.match(batchResult, /protected 1/, 'the batch summary hid the held item')
+assert.match(batchResult, /pending-review area/, 'the model was not told where the held item went')
+assert.equal(remembers().length, 4, 'the batch did not send one request per item')
 assert.ok(!JSON.stringify(logs).includes(TOKEN), 'token leaked into logs')
 
 await stub.close()
