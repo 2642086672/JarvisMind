@@ -82,7 +82,7 @@ def _audits(manager, action):
 # ------------------------------------------------------------------ A1 policy
 def test_intent_accepts_profile_facts_without_keyword():
     for text in (
-        "我叫梅凯龙",
+        "我叫林晓明",
         "我喜欢喝美式咖啡",
         "我平时喜欢喝美式",
         "以后我更喜欢喝美式咖啡",
@@ -147,11 +147,11 @@ def test_mergeable_group_rejects_merely_similar_memories():
 
 # --------------------------------------------------------------- A2 auto write
 def test_plain_name_is_auto_saved_without_keyword(manager):
-    result = _remember(manager, "我叫梅凯龙")
+    result = _remember(manager, "我叫林晓明")
     assert result.status == "SAVED", result.message
     assert result.memory_id
     rows = _rows(manager, "WHERE id=:id", {"id": result.memory_id})
-    assert rows[0]["content"] == "我叫梅凯龙"
+    assert rows[0]["content"] == "我叫林晓明"
     assert rows[0]["status"] == "ACTIVE"
 
 
@@ -182,8 +182,8 @@ def test_write_failure_is_not_reported_as_saved(manager, monkeypatch):
 
 # ------------------------------------------------------------------- B1 dedupe
 def test_identical_sentence_is_not_written_twice(manager):
-    first = _remember(manager, "我叫梅凯龙")
-    second = _remember(manager, "我叫梅凯龙")
+    first = _remember(manager, "我叫林晓明")
+    second = _remember(manager, "我叫林晓明")
     assert first.status == "SAVED"
     assert second.status == "DUPLICATE"
     assert _count(manager, "memory_records") == 1
@@ -395,14 +395,14 @@ def test_explicit_correction_updates_instead_of_conflicting(manager):
 
 
 def test_conflict_does_not_overwrite_high_confidence_memory(manager):
-    _seed_memory(manager, "用户姓名为梅凯龙", "PROFILE", "hi-1")
+    _seed_memory(manager, "用户姓名为林晓明", "PROFILE", "hi-1")
     with manager.session() as session:
         session.execute(
             text("UPDATE memory_records SET confidence=0.99 WHERE id='hi-1'")
         )
     result = _remember(manager, "我叫张三")
     assert result.status == "CONFLICT", result.message
-    assert _rows(manager, "WHERE id='hi-1'")[0]["content"] == "用户姓名为梅凯龙"
+    assert _rows(manager, "WHERE id='hi-1'")[0]["content"] == "用户姓名为林晓明"
 
 
 # ---------------------------------------------------------------- D sensitivity
@@ -466,7 +466,7 @@ def test_sensitive_fact_never_reaches_update_path(manager):
 
 # ------------------------------------------------------------- governance summary
 def test_governance_summary_reports_real_counts(manager):
-    _remember(manager, "我叫梅凯龙")
+    _remember(manager, "我叫林晓明")
     _remember(manager, "我有糖尿病，记住这个健康信息")
     summary = AutoMemoryService(manager).governance_summary()
     assert summary["active"] == 1

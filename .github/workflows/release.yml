@@ -23,7 +23,7 @@ jobs:
       - name: Test the backend
         working-directory: backend
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           python -m pytest
 
       - name: Build the console

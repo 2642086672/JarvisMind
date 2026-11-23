@@ -1044,7 +1044,7 @@ def test_audit_never_claims_a_verified_human_identity(
     )
     jw03_client.post(
         f"/api/v1/modification-requests/{req_id}/approve",
-        json={"confirmation_token": token, "actor_label": "human:凯龙"},
+        json={"confirmation_token": token, "actor_label": "human:林晓明"},
         headers=HEADERS,
     )
     detail = jw03_client.get(

@@ -125,7 +125,7 @@ view works on first launch.
 | Console | typecheck clean, 15 unit tests pass, production build succeeds |
 | Python SDK | 10 tests pass |
 | TypeScript SDK | 9 tests pass |
-| DSH plugin | 76 tests pass; build clean; `SMOKE OK` against DSH Desktop 0.2.0-rc.2 |
+| DSH plugin | 79 tests pass; build clean; `SMOKE OK` against DSH Desktop 0.2.0-rc.2 |
 | DSH cross-session demo | 16/16 checks, Python and TypeScript, against a live server |
 | Docker image, Windows and Linux installs, a real DSH application | **not verified** (see [the release report](RELEASE-1.0-FINAL-REPORT.md)) |
 

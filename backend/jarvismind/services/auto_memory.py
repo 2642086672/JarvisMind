@@ -157,7 +157,7 @@ def detect_memory_intent(text: str) -> _Intent:
             continue
         before = original[: match.start()].strip(" ，,。；;：:")
         after = original[match.end() :].strip(" ，,。；;：:")
-        # Prefer the clause carrying the actual fact. "我叫梅凯龙，记住我的名字"
+        # Prefer the clause carrying the actual fact. "我叫林晓明，记住我的名字"
         # yields the clause before the marker; "记住我喜欢咖啡" yields after.
         fact = before or after
         if not fact:

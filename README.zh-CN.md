@@ -96,7 +96,7 @@ SDK：[Python](sdk/python/README.md) 与 [TypeScript](sdk/typescript/README.md)�
 | 控制台 | 类型检查 0 错误，15 项单元测试通过，生产构建成功 |
 | Python SDK | 10 项测试通过 |
 | TypeScript SDK | 9 项测试通过 |
-| DSH 插件 | 76 项测试通过；构建无错；对 DSH Desktop 0.2.0-rc.2 实际运行 `SMOKE OK` |
+| DSH 插件 | 79 项测试通过；构建无错；对 DSH Desktop 0.2.0-rc.2 实际运行 `SMOKE OK` |
 | DSH 跨会话演示 | 16/16 检查通过，Python 与 TypeScript 均对真实服务运行 |
 | Docker 镜像、Windows 与 Linux 安装、真实 DSH 应用 | **未验证**（见[发布报告](RELEASE-1.0-FINAL-REPORT.md)） |
 

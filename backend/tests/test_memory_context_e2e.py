@@ -79,7 +79,7 @@ def test_context_merge_path_handles_multiple_real_memories(client, auth_headers,
 
 def test_real_write_then_identity_question(client, auth_headers, app):
     container = app.state.container
-    created = _create(container, "我叫梅凯龙")
+    created = _create(container, "我叫林晓明")
 
     body = _post(client, auth_headers, query="我是谁？")
 

@@ -241,7 +241,7 @@ against the profile directory and selects the bundle:
 
 ```bash
 "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
-  plugin --profile desktop add /Users/<you>/JarvisMind/plugins/dsh-jarvismind
+  plugin --profile desktop add /path/to/JarvisMind/plugins/dsh-jarvismind
 ```
 
 Reopen DSH Desktop afterwards. This was verified on 0.2.0-rc.2 in a disposable

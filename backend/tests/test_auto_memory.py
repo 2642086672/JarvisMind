@@ -50,7 +50,7 @@ def _seed_memory(manager, content, memory_type="SEMANTIC"):
 
 
 def test_intent_parser_handles_explicit_requests():
-    assert detect_memory_intent("我叫梅凯龙，记住我的名字").fact == "我叫梅凯龙"
+    assert detect_memory_intent("我叫林晓明，记住我的名字").fact == "我叫林晓明"
     assert detect_memory_intent("帮我记住我喜欢喝美式咖啡").fact == "我喜欢喝美式咖啡"
     assert detect_memory_intent("以后记得我的职业是软件工程师").fact == "我的职业是软件工程师"
     assert detect_memory_intent("更新我的个人信息：我长期使用 Windows 10").fact == (
@@ -61,11 +61,11 @@ def test_intent_parser_handles_explicit_requests():
 
 
 def test_name_is_auto_saved_through_approval_service(manager):
-    result = _remember(manager, "我叫梅凯龙，记住我的名字")
+    result = _remember(manager, "我叫林晓明，记住我的名字")
     assert result.status == "SAVED", result.message
     assert result.memory_id
     assert result.candidate_id
-    assert result.content == "我叫梅凯龙"
+    assert result.content == "我叫林晓明"
     with manager.session() as session:
         memory = session.execute(
             text("SELECT content, source_candidate_id FROM memory_records WHERE id=:id"),
@@ -75,7 +75,7 @@ def test_name_is_auto_saved_through_approval_service(manager):
             text("SELECT status, final_result FROM memory_candidates WHERE id=:id"),
             {"id": result.candidate_id},
         ).mappings().one()
-    assert memory["content"] == "我叫梅凯龙"
+    assert memory["content"] == "我叫林晓明"
     assert memory["source_candidate_id"] == result.candidate_id
     assert candidate["status"] == "APPROVED"
     assert candidate["final_result"] == "MANUALLY_APPROVED"
@@ -140,8 +140,8 @@ def test_credential_is_denied_and_not_persisted(manager):
 
 
 def test_duplicate_does_not_write_twice(manager):
-    first = _remember(manager, "我叫梅凯龙，记住我的名字")
-    second = _remember(manager, "我叫梅凯龙，记住我的名字")
+    first = _remember(manager, "我叫林晓明，记住我的名字")
+    second = _remember(manager, "我叫林晓明，记住我的名字")
     assert first.status == "SAVED"
     assert second.status == "DUPLICATE"
     assert _count(manager, "memory_records") == 1
@@ -188,7 +188,7 @@ def test_no_intent_is_not_written(manager):
 def test_auto_written_memory_can_be_forgotten(manager):
     from jarvismind.services.forget_service import ForgetApprovalService
 
-    saved = _remember(manager, "我叫梅凯龙，记住我的名字")
+    saved = _remember(manager, "我叫林晓明，记住我的名字")
     assert saved.status == "SAVED" and saved.memory_id
     service = ForgetApprovalService(manager)
     created, token, _ = service.create_request(saved.memory_id, reason="device test")
@@ -206,7 +206,7 @@ def test_http_auto_remember_receipt(client, auth_headers):
     response = client.post(
         "/api/v1/memories/auto-remember",
         json={
-            "text": "我叫梅凯龙，记住我的名字",
+            "text": "我叫林晓明，记住我的名字",
             "conversation_id": "conv-http",
             "message_id": "msg-http",
         },
@@ -216,5 +216,5 @@ def test_http_auto_remember_receipt(client, auth_headers):
     data = response.json()["data"]
     assert data["status"] == "SAVED"
     assert data["memory_id"]
-    assert data["content"] == "我叫梅凯龙"
+    assert data["content"] == "我叫林晓明"
     assert data["sensitive_categories"] == []

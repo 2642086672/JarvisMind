@@ -225,7 +225,7 @@ def test_question_filler_is_not_treated_as_topic(client, auth_headers, manager):
 
 
 def test_identity_question_finds_stated_name(client, auth_headers, manager):
-    name = _insert(manager, content="我叫梅凯龙", memory_type="PROFILE")
+    name = _insert(manager, content="我叫林晓明", memory_type="PROFILE")
     _insert(manager, content="用户喜爱摄影", memory_type="PROFILE")
     body = _post(client, auth_headers, query="我是谁？")
     assert name in _ids(body)

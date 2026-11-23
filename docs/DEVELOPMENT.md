@@ -34,7 +34,7 @@ Inside `backend/jarvismind/`:
 cd backend
 python3.13 -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + pytest
 
 cd ../console
 npm ci

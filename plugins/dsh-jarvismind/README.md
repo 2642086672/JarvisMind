@@ -65,7 +65,7 @@ npm pack --pack-destination /tmp
 Open **DSH Desktop → Plugins → Add plugin** and enter either:
 
 - the absolute path to this directory, for example
-  `/Users/<you>/JarvisMind/plugins/dsh-jarvismind`; or
+  `/path/to/JarvisMind/plugins/dsh-jarvismind`; or
 - the absolute path to the packed archive, for example
   `/tmp/dsh-plugin-jarvismind-0.1.0.tgz`.
 
@@ -81,7 +81,7 @@ runs, then use the CLI form:
 
 ```bash
 "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
-  plugin --profile desktop add /Users/<you>/JarvisMind/plugins/dsh-jarvismind
+  plugin --profile desktop add /path/to/JarvisMind/plugins/dsh-jarvismind
 ```
 
 This appends `dsh-plugin-jarvismind` to the profile's `dsh.profile.bundles` and
@@ -297,7 +297,7 @@ source locations.
 ```bash
 npm install
 npm run build
-npm test          # 67 tests: config, token, HTTP, prompt hardening, core anchor, recall, capture, security, plugin wiring
+npm test          # 79 tests: config, token, HTTP, prompt hardening, core anchor, recall, capture, security, plugin wiring
 npm run pack:check
 ```
 
