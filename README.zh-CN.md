@@ -21,6 +21,9 @@ JarvisMind 是一个开放、可自托管的 **AI 系统统一记忆基础设施
 - **`companion` 陪伴风格。** 除工作偏好与决策外，还可引导模型关注共同回忆、重要日期、情绪时刻与相处约定，并要求它安静记录、不宣布“已保存”。
 - **上下文压缩后的灵魂连续性。** `<jarvismind-core-anchor>` 块每轮由核心画像、称呼习惯与长期关系记忆重建，并与每轮召回去重。它是数据，既不是模板也不是指令。
 - **知识图谱开箱即用。** `init-db` 与新建空间会在建库事务内建好图谱表，控制台的图谱视图首次启动就不为空。
+- **核心锚点保留较早的画像记忆。** PROFILE 记忆先按类型单独查询，再补充其他类型，因此较早的称呼或相处约定不会因为新记忆变多而被挤掉。锚点最多读取最新的 100 条 PROFILE 记忆，超过之后最老的仍不会进入。
+- **Windows 修复。** 控制台在 Windows 路径下不再把缺失资源回退为 `index.html`；`~\` 令牌路径正确展开；setup-agent 的权限测试只在支持 POSIX 权限位的系统上检查。
+- **测试依赖独立。** `requirements.txt` 只含运行依赖；`requirements-dev.txt` 额外加入 pytest 用于运行测试。
 
 ## 架构
 
@@ -60,6 +63,13 @@ python -m jarvismind init-db      # 创建 ./data/jarvismind.db 与 ./data/contr
 python -m jarvismind serve        # http://127.0.0.1:8777
 ```
 
+运行测试套件时，先安装开发依赖，再在 `backend/` 中运行 pytest：
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 验证服务：
 
 ```bash
@@ -92,13 +102,14 @@ SDK：[Python](sdk/python/README.md) 与 [TypeScript](sdk/typescript/README.md)�
 
 | 领域 | 发布环境中的结果 |
 | --- | --- |
-| 后端测试套件（含 P0 发布门禁） | 2532 通过，0 失败，0 跳过；门禁 67/67 |
+| 后端测试套件（含 P0 发布门禁） | 2533 通过，0 失败，0 跳过；门禁 67/67 |
 | 控制台 | 类型检查 0 错误，15 项单元测试通过，生产构建成功 |
 | Python SDK | 10 项测试通过 |
 | TypeScript SDK | 9 项测试通过 |
 | DSH 插件 | 79 项测试通过；构建无错；对 DSH Desktop 0.2.0-rc.2 实际运行 `SMOKE OK` |
 | DSH 跨会话演示 | 16/16 检查通过，Python 与 TypeScript 均对真实服务运行 |
-| Docker 镜像、Windows 与 Linux 安装、真实 DSH 应用 | **未验证**（见[发布报告](RELEASE-1.0-FINAL-REPORT.md)） |
+| Windows（本地开发机） | 运行了完整后端测试、控制台构建与浏览器冒烟（登录、仪表盘、图谱 `ready`、主题切换，控制台无报错）。离线的新机器上，首次列出记忆可能因嵌入模型下载重试而等待约 40 秒 |
+| Docker 镜像、Linux 安装、真实 DSH 应用 | **未验证**（见[发布报告](RELEASE-1.0-FINAL-REPORT.md)） |
 
 限制与未完成项列在 [docs/ROADMAP.md](docs/ROADMAP.md) 与发布报告中。
 

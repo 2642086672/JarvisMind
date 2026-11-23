@@ -41,6 +41,13 @@ correct all of it.
   per-turn recall. It is data, never a template and never an instruction.
 - **The knowledge graph works on a fresh install.** `init-db` and new-space provisioning create the graph
   tables inside the database-creation transaction, so the console's graph view is not empty on first launch.
+- **Core anchor keeps older profile memories.** PROFILE memories are now read with their own query before any
+  other type, so an old name or form of address no longer drops out when many newer memories exist. The anchor
+  reads up to the newest 100 PROFILE memories; beyond that the oldest are still not included.
+- **Windows fixes.** The console no longer answers a missing asset with `index.html` on Windows paths, `~\`
+  token paths expand correctly, and the setup-agent tests check permissions only where POSIX modes exist.
+- **Test dependencies are separate.** `requirements.txt` holds the runtime dependencies only;
+  `requirements-dev.txt` adds pytest for running the suite.
 
 ## Architecture
 
@@ -82,6 +89,13 @@ python -m jarvismind init-db      # creates ./data/jarvismind.db and ./data/cont
 python -m jarvismind serve        # http://127.0.0.1:8777
 ```
 
+To run the test suite, install the development requirements and run pytest from `backend/`:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 Check it:
 
 ```bash
@@ -121,13 +135,14 @@ view works on first launch.
 
 | Area | Result in the release environment |
 | --- | --- |
-| Backend test suite (including the P0 release gate) | 2532 passed, 0 failed, 0 skipped; gate 67/67 |
+| Backend test suite (including the P0 release gate) | 2533 passed, 0 failed, 0 skipped; gate 67/67 |
 | Console | typecheck clean, 15 unit tests pass, production build succeeds |
 | Python SDK | 10 tests pass |
 | TypeScript SDK | 9 tests pass |
 | DSH plugin | 79 tests pass; build clean; `SMOKE OK` against DSH Desktop 0.2.0-rc.2 |
 | DSH cross-session demo | 16/16 checks, Python and TypeScript, against a live server |
-| Docker image, Windows and Linux installs, a real DSH application | **not verified** (see [the release report](RELEASE-1.0-FINAL-REPORT.md)) |
+| Windows (local development machine) | Full backend suite, console build and a browser smoke run (login, dashboard, graph `ready`, theme switch, no console errors). A fresh offline machine can take about 40 s on the first memory list while the embedding model download retries |
+| Docker image, Linux install, a real DSH application | **not verified** (see [the release report](RELEASE-1.0-FINAL-REPORT.md)) |
 
 Limits and open items are listed in [docs/ROADMAP.md](docs/ROADMAP.md) and in the release report.
 
