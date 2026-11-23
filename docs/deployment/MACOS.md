@@ -37,6 +37,18 @@ JARVISMIND_DATA_DIR="$HOME/Library/Application Support/JarvisMind/data" python -
 Use the same `JARVISMIND_DATA_DIR` for every command. Otherwise the server starts with an empty, uninitialized
 directory and refuses to run.
 
+A simpler alternative that also keeps everything under one directory:
+
+```bash
+export JARVISMIND_DATA_DIR="$HOME/.jarvismind/data"
+```
+
+That places the database next to `~/.jarvismind/dsh-agent.token`, which the DSH plugin and the
+MCP server already read, so a single directory holds both halves of the integration. Whichever
+you choose, put the `export` in `~/.zshrc`: a directory that only exists in one terminal session
+is how an "empty console" happens — the server creates a second database and the old memories
+look gone.
+
 ## Keep it running (optional)
 
 A launch agent starts the server at login. Create `~/Library/LaunchAgents/io.jarvismind.server.plist` with the program

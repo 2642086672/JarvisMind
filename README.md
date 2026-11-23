@@ -33,6 +33,10 @@
 ## 近期核心更新
 
 * **由模型自主判断“什么值得记”（`rememberMode: agent`）**：不再每轮把“嗯 / 好的 / 谢谢”盲目写入，而是由当前会话 AI 提炼真正有长期价值的信息调用 `jarvismind_remember`，后端通过 `mode: direct` 在完整保留凭据拦截、敏感治理与去重的前提下直接落库。
+* **回合末兜底，因为模型真的会忘**：某一轮结束时若模型根本没调用工具，就用 `mode: auto` 补交一次有实质内容的用户消息，仍由服务端判定是否值得存。模型本轮已记录过则不重复提交，寒暄也不会触发。`fallbackCaptureOnTurnEnd: false` 可关闭。
+* **批量写入**：DSH 插件与 MCP 的 `jarvismind_remember` 都接受 `items`（单次最多 20 条），粘贴一份导出的记忆可以一次入库。每条独立走治理接口，结果汇总 saved / duplicate / protected / denied / failed。两种记忆风格也都要求模型**先把粘贴材料里的事实存进去，再写总结**。
+* **首轮不再超时**：插件 `timeoutMs` 默认值改为 `6000`；`serve` 在监听就绪后用后台线程预热嵌入模型（`JARVISMIND_WARMUP_EMBEDDING=0` 可关闭）。冷启动的模型加载以前正好落在第一个请求里。
+* **数据目录与代码解耦**：安装文档改为推荐固定 `JARVISMIND_DATA_DIR`（如 `~/.jarvismind/data`），升级或重新克隆仓库时不会再出现“记忆全没了”的错觉。
 * **`companion` 陪伴记忆模式**：除常规工作效率风格（`assistant`）外，开启 `companion` 后可引导 AI 留意共同回忆、内部梗、重要日期、情绪时刻与相处约定，且**静默记录、绝不播报“已保存”**，保持自然沉浸感。
 * **核心灵魂锚点突破 100 条记忆限制**：`<jarvismind-core-anchor>` 优先按 `PROFILE` 类型单独查询，再补充其他类型（最多读取最新 100 条 `PROFILE`），早期建立的称呼与核心约定不会被后续新记忆挤掉。
 * **知识图谱开箱即用**：`init-db` 与新建空间在建库事务内自动建表并开启 `jkg.enabled`，首启即 `ready`。
@@ -77,9 +81,18 @@ cd JarvisMind
 
 ### 2. 初始化并启动服务
 
+> **长期使用请先把数据目录移出代码仓库。** 默认数据库在 `backend/data/`，升级或重新克隆仓库时很容易整目录换掉，让人误以为“记忆全丢了”。设置一个固定目录，记忆库与令牌就不随代码走：
+>
+> ```bash
+> export JARVISMIND_DATA_DIR="$HOME/.jarvismind/data"   # 写进 ~/.zshrc 长期生效
+> ```
+>
+> Windows PowerShell：`[Environment]::SetEnvironmentVariable('JARVISMIND_DATA_DIR', "$HOME\.jarvismind\data", 'User')`
+
 **macOS / Linux：**
 
 ```bash
+export JARVISMIND_DATA_DIR="$HOME/.jarvismind/data"
 cd backend
 python3.13 -m venv .venv
 source .venv/bin/activate
@@ -91,6 +104,7 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 **Windows（PowerShell）：**
 
 ```powershell
+$env:JARVISMIND_DATA_DIR = "$HOME\.jarvismind\data"
 cd backend
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -106,7 +120,7 @@ python -m jarvismind serve
 curl -s http://127.0.0.1:8777/health
 ```
 
-首次启动会在 `backend/data/.jarvismind_token` 自动生成所有者令牌（权限 `0600`，也可通过 `JARVISMIND_API_TOKEN` 覆盖）。浏览器打开 `http://127.0.0.1:8777/console/` 登录即可。
+首次启动会在 `<数据目录>/.jarvismind_token` 自动生成所有者令牌（权限 `0600`，也可通过 `JARVISMIND_API_TOKEN` 覆盖）。未设置 `JARVISMIND_DATA_DIR` 时数据目录为 `backend/data/`。浏览器打开 `http://127.0.0.1:8777/console/` 登录即可。
 
 如需运行后端测试套件，安装开发依赖后再执行 `pytest`：
 
@@ -142,15 +156,15 @@ python -m pytest
 
 | 模块 / 平台 | 当前验证结果 |
 | --- | --- |
-| 后端全量测试（含 P0 门禁） | 2566 通过 / 0 失败 / 0 跳过；门禁 67/67 |
+| 后端全量测试（含 P0 门禁） | 2578 通过 / 0 失败 / 0 跳过；门禁 67/67 |
 | Web 控制台 | TypeScript 0 错误，15 项单元测试通过，生产构建成功 |
 | Python SDK / TypeScript SDK | 10 项 / 9 项测试通过 |
-| DSH 原生插件 | 79 项测试通过；构建无错；DSH Desktop `0.2.0-rc.2` 真实运行时 `SMOKE OK` |
+| DSH 原生插件 | 92 项测试（macOS 上 91 通过 + 1 项仅 Windows 运行）；构建无错；DSH Desktop `0.2.0-rc.2` 真实运行时 `SMOKE OK` |
 | DSH 跨会话演示 | 16/16 检查通过（Python 与 TypeScript 均对真实服务运行） |
 | Windows 实测（本机） | 已跑通后端测试与控制台构建；浏览器冒烟（登录、仪表盘、图谱 `ready`、明暗主题切换零报错）。macOS 与 Linux 尚未实测 |
 | Docker 镜像、Linux 安装、独立终审 | **尚未完成**（见 [RELEASE-1.0-FINAL-REPORT.md](RELEASE-1.0-FINAL-REPORT.md)，暂未打 `v1.0.0` Tag） |
 
-> 离线新机器上首次列出记忆时，如本地无嵌入模型缓存，可能因模型下载重试等待约 40 秒；配置 `FASTEMBED_CACHE_PATH` 或预先缓存模型即可避免。
+> 离线新机器上首次列出记忆时，如本地无嵌入模型缓存，可能因模型下载重试等待约 40 秒。`serve` 启动后会在后台线程预热嵌入模型，把这份开销从第一个请求上移走（`JARVISMIND_WARMUP_EMBEDDING=0` 可关闭）；配置 `FASTEMBED_CACHE_PATH` 或预先缓存模型能进一步避免。
 
 ## 文档索引与安全
 

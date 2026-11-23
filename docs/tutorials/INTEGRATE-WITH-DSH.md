@@ -274,10 +274,18 @@ non-Desktop profiles.
 The bundle row id is `jarvismind`. Defaults: `baseUrl`
 `http://127.0.0.1:8777`, `tokenFile` `~/.jarvismind/dsh-agent.token`,
 `tokenEnv` `JARVISMIND_AGENT_TOKEN` (wins over the file), `autoRecall` `true`,
-`recallLimit` `6`, `autoRemember` `true`, `coreAnchorEnabled` `true`,
-`coreAnchorLimit` `6`, `coreAnchorMaxChars` `500`, `timeoutMs` `2500`. Override
-them in the Desktop profile's `cordis.patch.yml`; see
+`recallLimit` `6`, `autoRemember` `true`, `rememberMode` `agent`,
+`fallbackCaptureOnTurnEnd` `true`, `memoryStyle` `assistant`, `coreAnchorEnabled`
+`true`, `coreAnchorLimit` `6`, `coreAnchorMaxChars` `500`, `timeoutMs` `6000`.
+Override them in the Desktop profile's `cordis.patch.yml`; see
 [`plugins/dsh-jarvismind/README.md`](../../plugins/dsh-jarvismind/README.md#3-configure-optional).
+
+The 6-second timeout is not arbitrary. The first recall after a cold start can
+spend seconds loading the embedding model, and the previous 2.5 s default made
+that turn look like a lost memory. On the server side, `serve` also warms the
+model in a background thread once it is listening (`JARVISMIND_WARMUP_EMBEDDING`,
+on by default, `0` to disable), so the cost usually is not paid by a request at
+all.
 
 Recall and capture are fail-open: a stopped, slow, or failing JarvisMind server
 never blocks or breaks a DSH reply. The injected block is marked as read-only,
@@ -314,6 +322,28 @@ is what filters out greetings and one-line acknowledgements; with `auto` the
 turn-level capture submits every turn instead. In either case JMR applies the
 same governance before anything is stored.
 
+`agent` mode keeps one safety net. Models do forget the tool call — most often
+while summarising a long pasted document — and the user never sees that nothing
+was stored. So when a turn ends and the tool was not called during it, a
+substantive user message is submitted once with `mode: "auto"`, which means the
+server's own intent and credential gates still judge it. The fallback is skipped
+when the model *did* remember, so nothing is sent twice, and it never offers a
+pleasantry or a one-character reply. `fallbackCaptureOnTurnEnd: false` turns it
+off.
+
+Both styles also carry a store-then-answer rule: a pasted self-introduction, an
+exported memory list, a chat history or a background profile must have its durable
+facts extracted and stored first, and only then summarised — even if the user
+only asked for a summary. The order matters because a summary in the chat is not
+a memory, and the pasted material does not survive compaction.
+
+For the same reason `jarvismind_remember` accepts a batch: pass `items` (up to 20
+statements) to store a whole export in one call. Each entry is a separate governed
+request, so every statement is judged on its own, and the result reports how many
+were saved, deduplicated, held for review, denied or failed. An entry the server
+holds as sensitive is reported as `PROTECTED`, with a note that the owner must
+approve it in the console.
+
 `memoryStyle` sets what the model is steered to notice. `assistant` (the default)
 focuses on preferences, decisions, habits and dates. `companion` adds shared
 jokes and private references, significant events and when they happened,
@@ -331,9 +361,9 @@ What the plugin **cannot** do: DSH 0.2.0-rc.2 has compaction events
 (`compaction/start`, `compaction/summary`, `compaction/end`, `compaction/prune`)
 but no cancellable before-compaction hook, so a plugin cannot veto or delay
 compaction. On `compaction/start` the plugin flushes any statement still queued
-for remember as a best effort — work that only exists in `auto` or `both` mode —
-and continuity afterwards rests on the anchor and on what the model recorded
-before the turn ended. See
+for remember as a best effort — a turn the model already remembered is dropped
+rather than sent twice — and continuity afterwards rests on the anchor and on what
+the model recorded before the turn ended. See
 [`CONTRACT.md`](../../plugins/dsh-jarvismind/CONTRACT.md#context-compaction) for
 the probe evidence.
 

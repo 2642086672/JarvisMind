@@ -8,6 +8,30 @@ All notable changes to JarvisMind are recorded here. The format follows
 
 ### Added
 
+- **Data directory recommendation.** The READMEs, `docs/INSTALLATION.md` and `docs/deployment/MACOS.md` now tell a
+  long-running install to put `JARVISMIND_DATA_DIR` outside the checkout (for example `~/.jarvismind/data`). Re-cloning
+  or upgrading the repository otherwise takes `backend/data/` with it, and the empty database that follows looks exactly
+  like "all my memories are gone".
+- **Turn-end fallback for AI-decided capture (DSH plugin).** `rememberMode: agent` now keeps a safety net: when a
+  turn ends and the model did not call `jarvismind_remember` during it, a substantive user message is submitted once
+  with `mode: "auto"`, so the server's own intent and credential gates still judge it. Models forget the tool call —
+  most often while summarising a long pasted document — and the user never sees that nothing was stored. The fallback
+  is skipped when the model did remember, so a statement is never sent twice, and it never offers a pleasantry or a
+  one-character reply. New option `fallbackCaptureOnTurnEnd` (default `true`).
+- **Batch writes in `jarvismind_remember`.** Both the DSH plugin tool and the MCP tool accept `items: string[]`
+  (maximum 20, enforced in code because the DSH tool schema DSL has no `maxItems`) alongside the existing `text`, which
+  is unchanged and still supported. Each entry is its own governed `POST /api/v1/agent/remember`, so no schema change
+  and no bypass: the credential gate, sensitivity hold and de-duplication run per statement. The result reports
+  `saved` / `duplicate` / `protected` / `denied` / `failed` counts plus per-item rows, and a `PROTECTED` entry tells the
+  model that the owner must approve it in the console. Duplicates inside one batch are collapsed.
+- **Store-then-answer guidance for pasted material.** Both `memoryStyle` briefs now require the model to extract and
+  store the durable facts from a self-introduction, an exported memory list, a chat-history export or a background
+  profile **before** writing a summary — even when the user only asked for a summary. A summary in the chat is not a
+  memory, and the pasted material does not survive compaction.
+- **Embedding warm-up on `serve`.** Once the listener is bound, `serve` loads the embedding model in a daemon thread
+  so the first recall does not pay for a cold ONNX load inside a request. `JARVISMIND_WARMUP_EMBEDDING` (default `1`,
+  `0` to disable) controls it. It never delays startup, never runs under `pytest` or `TestClient` (only the `serve`
+  command starts it), and fails open: no cache, no network, or a raising provider is logged once and dropped.
 - **AI-decided memory and a companion style (DSH plugin).** `rememberMode` (`agent` by default, or `auto` / `both`)
   decides which mechanism selects memories: under `agent` the model calls `jarvismind_remember` in its own
   judgement instead of every turn being submitted, which stops greetings and one-line acknowledgements from being
@@ -37,6 +61,9 @@ All notable changes to JarvisMind are recorded here. The format follows
 
 ### Fixed
 
+- **The first recall no longer times out on a cold start.** The DSH plugin's `timeoutMs` default is now `6000`
+  (clamp unchanged at 200–30000). The old `2500` was shorter than a first-time embedding load, so the first turn could
+  silently drop its memory and look like data loss.
 - **`setup_agent.py` on a fresh install.** The script creates missing parent directories for `--out` with
   mode `0700` and writes the token with mode `0600`, so `--out ~/.jarvismind/dsh-agent.token` no longer fails
   with `ENOENT` when `~/.jarvismind` does not exist yet.

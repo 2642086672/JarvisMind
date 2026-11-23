@@ -32,6 +32,10 @@ Every piece of feedback matters during the public beta:
 ## Recent highlights
 
 * **The model decides what is worth remembering (`rememberMode: agent`):** instead of blindly writing every "okay / thanks" to memory, the active AI distils the information with lasting value and calls `jarvismind_remember`. The backend stores it directly through `mode: direct`, with credential blocking, sensitivity governance and de-duplication all still applied.
+* **A turn-end fallback, because models forget:** if a turn ends and the model did not call the tool, a substantive user message is submitted once with `mode: auto`, so the server still judges it. It never runs for a turn the model already remembered, and never for a pleasantry. `fallbackCaptureOnTurnEnd: false` disables it.
+* **Batch writes:** `jarvismind_remember` accepts `items` (up to 20 statements) in both the DSH plugin and the MCP server, so a pasted export is stored in one call. Each entry is its own governed request, and the result reports saved / duplicate / protected / denied / failed. Both memory styles now tell the model to store the facts from pasted material **before** summarising it.
+* **The first recall no longer times out:** the plugin's `timeoutMs` default is now `6000`, and `serve` warms the embedding model in a background thread after the listener is up (`JARVISMIND_WARMUP_EMBEDDING=0` disables it). A cold model load used to land inside the first request.
+* **Data directory outside the checkout:** the install docs now recommend a fixed `JARVISMIND_DATA_DIR` (for example `~/.jarvismind/data`), so re-cloning or upgrading the repository cannot look like "my memories are gone".
 * **`companion` memory style:** besides the everyday work style (`assistant`), the `companion` style guides the AI to notice shared memories, inside references, important dates, emotional moments and standing agreements, and to record them **silently, without ever announcing "saved"**, to keep the interaction natural.
 * **The core anchor is no longer limited to the newest 100 memories:** `<jarvismind-core-anchor>` first queries `PROFILE` memories on their own, then fills the remaining room with other types. It reads at most the newest 100 `PROFILE` memories, so early names and core agreements are not pushed out by later memories.
 * **The knowledge graph is ready out of the box:** `init-db` and new spaces create the tables inside the database-creation transaction and enable `jkg.enabled`, so the graph reports `ready` on first start.
@@ -77,9 +81,18 @@ cd JarvisMind
 
 ### 2. Initialise and start the service
 
+> **Move the data directory out of the repository before long-term use.** The default lives in `backend/data/`, so re-cloning or upgrading the repository can take the whole directory with it, and the empty database that follows looks exactly like "all my memories are gone". A fixed directory outside the code keeps the database and the token independent of the checkout:
+>
+> ```bash
+> export JARVISMIND_DATA_DIR="$HOME/.jarvismind/data"   # put it in ~/.zshrc to make it stick
+> ```
+>
+> Windows PowerShell: `[Environment]::SetEnvironmentVariable('JARVISMIND_DATA_DIR', "$HOME\.jarvismind\data", 'User')`
+
 **macOS / Linux:**
 
 ```bash
+export JARVISMIND_DATA_DIR="$HOME/.jarvismind/data"
 cd backend
 python3.13 -m venv .venv
 source .venv/bin/activate
@@ -91,6 +104,7 @@ JARVISMIND_CONSOLE_DIR="$(cd ../console && pwd)/dist" python -m jarvismind serve
 **Windows (PowerShell):**
 
 ```powershell
+$env:JARVISMIND_DATA_DIR = "$HOME\.jarvismind\data"
 cd backend
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -106,7 +120,7 @@ python -m jarvismind serve
 curl -s http://127.0.0.1:8777/health
 ```
 
-On first start the owner token is generated at `backend/data/.jarvismind_token` (mode `0600`). You can also set it with the `JARVISMIND_API_TOKEN` environment variable. Open `http://127.0.0.1:8777/console/` in a browser and sign in.
+On first start the owner token is generated at `<data directory>/.jarvismind_token` (mode `0600`). You can also set it with the `JARVISMIND_API_TOKEN` environment variable. Without `JARVISMIND_DATA_DIR` the data directory is `backend/data/`. Open `http://127.0.0.1:8777/console/` in a browser and sign in.
 
 To run the backend test suite, install the development requirements first, then run `pytest`:
 
@@ -142,15 +156,15 @@ Run `python -m jarvismind mcp` to expose JarvisMind as a native MCP server to Cl
 
 | Module / platform | Result |
 | --- | --- |
-| Backend test suite (including the P0 gate) | 2566 passed / 0 failed / 0 skipped; gate 67/67 |
+| Backend test suite (including the P0 gate) | 2578 passed / 0 failed / 0 skipped; gate 67/67 |
 | Web console | TypeScript 0 errors, 15 unit tests pass, production build succeeds |
 | Python SDK / TypeScript SDK | 10 / 9 tests pass |
-| Native DSH plugin | 79 tests pass; build clean; `SMOKE OK` against a real DSH Desktop `0.2.0-rc.2` runtime |
+| Native DSH plugin | 92 tests (91 pass + 1 Windows-only skip on macOS); build clean; `SMOKE OK` against a real DSH Desktop `0.2.0-rc.2` runtime |
 | DSH cross-session demo | 16/16 checks pass (Python and TypeScript, against a live server) |
 | Windows (local development machine) | Backend tests and console build pass; a browser smoke passed (sign-in, dashboard, graph `ready`, light/dark theme switch with no errors). macOS and Linux have not been tested yet |
 | Docker image, Linux install, independent final review | **Not done yet** (see [RELEASE-1.0-FINAL-REPORT.md](RELEASE-1.0-FINAL-REPORT.md); no `v1.0.0` tag has been created) |
 
-> On a fresh machine with no local embedding-model cache, the first memory list can take about 40 seconds while the model download retries. Set `FASTEMBED_CACHE_PATH` or pre-cache the model to avoid this.
+> On a fresh machine with no local embedding-model cache, the first memory list can take about 40 seconds while the model download retries. `serve` now warms the model in a background thread once it is listening, moving that cost off the first request (`JARVISMIND_WARMUP_EMBEDDING=0` disables it); setting `FASTEMBED_CACHE_PATH` or pre-caching the model avoids it entirely.
 
 ## Documentation index and security
 

@@ -48,19 +48,34 @@ safe to run twice. `serve` refuses to start until `init-db` has run.
 python -m jarvismind serve
 ```
 
-The API listens on `http://127.0.0.1:8777` by default. Change the data directory with
-`JARVISMIND_DATA_DIR` (an absolute path is recommended). The full list of settings is in
+The API listens on `http://127.0.0.1:8777` by default. The full list of settings is in
 [CONFIGURATION.md](CONFIGURATION.md).
+
+### Keep the data directory outside the checkout
+
+`JARVISMIND_DATA_DIR` defaults to `backend/data/`. Set it to an absolute path outside the
+repository and keep using it for every command — that is what makes the database, the
+vectors and the owner token survive a re-clone, an upgrade, or a `git clean`:
+
+```bash
+export JARVISMIND_DATA_DIR="$HOME/.jarvismind/data"   # add to ~/.zshrc or ~/.bashrc
+```
+
+The same rule applies to `init-db`, `serve`, and any maintenance script: if one command
+uses a different directory, it will happily create a second, empty database, and the
+console will look as if every memory disappeared. If your console is unexpectedly empty,
+check this variable first.
 
 ## 4. Find the owner token
 
 The owner token is the credential for the console and for operator routes. It is taken from
-`JARVISMIND_API_TOKEN` when that variable is set. Otherwise it is read from `data/.jarvismind_token`, which is
+`JARVISMIND_API_TOKEN` when that variable is set. Otherwise it is read from `<data directory>/.jarvismind_token`, which is
 created on the first start with mode 0600. The server never prints the token.
 
 ```bash
-cat data/.jarvismind_token                     # Linux and macOS
-Get-Content data\.jarvismind_token             # Windows PowerShell
+token_dir="${JARVISMIND_DATA_DIR:-data}"
+cat "$token_dir/.jarvismind_token"                # Linux and macOS
+Get-Content "$env:JARVISMIND_DATA_DIR\.jarvismind_token"   # Windows PowerShell
 ```
 
 Send it either as `X-API-Token: <token>` or as `Authorization: Bearer <token>`.
