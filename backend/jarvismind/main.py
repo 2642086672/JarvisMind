@@ -281,7 +281,11 @@ class SpaStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except HTTPException as exc:
-            if exc.status_code != 404 or path.startswith("assets/"):
+            # Starlette builds `path` with the OS separator, so on Windows a missing
+            # asset arrives as `assets\missing.js`. Normalise before the guard, or the
+            # fallback would answer a missing asset with index.html and status 200.
+            relative = path.replace("\\", "/")
+            if exc.status_code != 404 or relative.startswith("assets/"):
                 raise
             return await super().get_response("index.html", scope)
 

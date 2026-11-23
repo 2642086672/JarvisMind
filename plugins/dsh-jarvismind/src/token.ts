@@ -3,10 +3,18 @@ import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import type { ResolvedConfig } from './types.js'
 
-/** Expand a leading `~` using the current user's home directory. */
+/**
+ * Expand a leading `~` using the current user's home directory.
+ *
+ * Windows operators write `~\.jarvismind\token` as naturally as `~/…`, so both
+ * separators are accepted there. Without this, a backslash form fell through to
+ * `resolve(file)` and was resolved against the process working directory, which
+ * silently produced a path that does not exist (and therefore no token).
+ */
 export function expandHome(file: string, home: string = homedir()): string {
   if (file === '~') return home
-  if (file.startsWith('~/')) return resolve(home, file.slice(2))
+  const homeRelative = file.startsWith('~/') || (process.platform === 'win32' && file.startsWith('~\\'))
+  if (homeRelative) return resolve(home, file.slice(2))
   return resolve(file)
 }
 

@@ -6,6 +6,7 @@ Run from this directory:
 """
 from __future__ import annotations
 
+import os
 import pathlib
 import stat
 import sys
@@ -21,6 +22,11 @@ import setup_agent  # noqa: E402  (path setup must run first)
 
 TOKEN = "jmt_plaintext_for_regression_test"
 OWNER_SECRET = "owner-secret-for-regression-test"
+
+# POSIX mode bits only exist on POSIX. On Windows, chmod() maps to the read-only
+# attribute and stat() always reports 0o666/0o777, so asserting 0o600 there fails
+# even though the script behaves correctly (NTFS ACLs protect the profile dir).
+POSIX = os.name == "posix"
 
 
 class SetupAgentTest(unittest.TestCase):
@@ -70,9 +76,15 @@ class SetupAgentTest(unittest.TestCase):
             "/api/v1/control/agents/agent_test/tokens",
         ])
         self.assertEqual(out.read_text(encoding="utf-8"), TOKEN)
-        self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
-        self.assertEqual(stat.S_IMODE(out.parent.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE((self.tmp / "nested").stat().st_mode), 0o700)
+        self.assertTrue(out.parent.is_dir())
+        self.assertTrue((self.tmp / "nested").is_dir())
+        if POSIX:
+            self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(out.parent.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE((self.tmp / "nested").stat().st_mode), 0o700)
+        else:
+            # The owner must still be able to write the token file.
+            self.assertTrue(out.stat().st_mode & stat.S_IWRITE)
 
         # The plaintext token must never reach stdout.
         rendered = " ".join(str(call) for call in printed.call_args_list)
@@ -88,8 +100,12 @@ class SetupAgentTest(unittest.TestCase):
         rc, _calls, _printed = self._run_main(out)
 
         self.assertEqual(rc, 0)
-        self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o750)
-        self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
+        self.assertEqual(out.read_text(encoding="utf-8"), TOKEN)
+        if POSIX:
+            self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o750)
+            self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
+        else:
+            self.assertTrue(out.stat().st_mode & stat.S_IWRITE)
 
     def test_an_existing_wide_token_file_is_tightened(self) -> None:
         out = self.tmp / "dsh-agent.token"
@@ -99,8 +115,11 @@ class SetupAgentTest(unittest.TestCase):
         rc, _calls, _printed = self._run_main(out)
 
         self.assertEqual(rc, 0)
-        self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
         self.assertEqual(out.read_text(encoding="utf-8"), TOKEN)
+        if POSIX:
+            self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
+        else:
+            self.assertTrue(out.stat().st_mode & stat.S_IWRITE)
 
 
 if __name__ == "__main__":
