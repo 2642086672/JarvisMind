@@ -134,11 +134,15 @@ Full steps: [plugins/dsh-jarvismind/README.md](plugins/dsh-jarvismind/README.md)
 
 See [docs/AGENT-INTEGRATION.md](docs/AGENT-INTEGRATION.md), the [Python SDK](sdk/python/README.md) and the [TypeScript SDK](sdk/typescript/README.md).
 
+### Option 3: native MCP integration
+
+Run `python -m jarvismind mcp` to expose JarvisMind as a native MCP server to Claude Desktop, Cursor, OpenCode, Windsurf and other MCP-capable clients. It bridges stdio to the local HTTP service with no extra dependencies and reuses the server's authentication, space isolation and two-step forget flow. Full configuration, including macOS and Windows examples: [docs/MCP.md](docs/MCP.md).
+
 ## Current verification status (stated plainly)
 
 | Module / platform | Result |
 | --- | --- |
-| Backend test suite (including the P0 gate) | 2533 passed / 0 failed / 0 skipped; gate 67/67 |
+| Backend test suite (including the P0 gate) | 2566 passed / 0 failed / 0 skipped; gate 67/67 |
 | Web console | TypeScript 0 errors, 15 unit tests pass, production build succeeds |
 | Python SDK / TypeScript SDK | 10 / 9 tests pass |
 | Native DSH plugin | 79 tests pass; build clean; `SMOKE OK` against a real DSH Desktop `0.2.0-rc.2` runtime |

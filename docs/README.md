@@ -24,6 +24,7 @@ Start with the [README](../README.md). The documents below describe the 1.0.0 re
 - [API v1](API.md): authentication, envelopes, errors, rate limits, the agent surface.
 - [API reference (generated)](API-REFERENCE.md): every route, generated from the running server's OpenAPI document.
 - [SDK](SDK.md): the Python and TypeScript clients.
+- [MCP server](MCP.md): native stdio access for Claude Desktop, Cursor, OpenCode, Windsurf and other MCP clients.
 - [Agent integration](AGENT-INTEGRATION.md): agents, permissions, spaces, the context block, adapters.
 - [DSH integration tutorial](tutorials/INTEGRATE-WITH-DSH.md): the full walk-through with a runnable demo.
 

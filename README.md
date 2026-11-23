@@ -134,11 +134,15 @@ python -m pytest
 
 详见 [docs/AGENT-INTEGRATION.md](docs/AGENT-INTEGRATION.md)、[Python SDK](sdk/python/README.md) 与 [TypeScript SDK](sdk/typescript/README.md)。
 
+### 方式三：MCP 原生接入
+
+运行 `python -m jarvismind mcp` 即可把 JarvisMind 作为原生 MCP Server 接入 Claude Desktop、Cursor、OpenCode、Windsurf 等支持 MCP 的客户端。它通过 stdio 桥接本机 HTTP 服务，零新增依赖，并复用服务端鉴权、空间隔离与两步遗忘流程。完整配置（含 macOS 与 Windows 示例）见 [docs/MCP.md](docs/MCP.md)。
+
 ## 当前验证状态（诚实口径）
 
 | 模块 / 平台 | 当前验证结果 |
 | --- | --- |
-| 后端全量测试（含 P0 门禁） | 2533 通过 / 0 失败 / 0 跳过；门禁 67/67 |
+| 后端全量测试（含 P0 门禁） | 2566 通过 / 0 失败 / 0 跳过；门禁 67/67 |
 | Web 控制台 | TypeScript 0 错误，15 项单元测试通过，生产构建成功 |
 | Python SDK / TypeScript SDK | 10 项 / 9 项测试通过 |
 | DSH 原生插件 | 79 项测试通过；构建无错；DSH Desktop `0.2.0-rc.2` 真实运行时 `SMOKE OK` |

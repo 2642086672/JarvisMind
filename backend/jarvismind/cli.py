@@ -8,6 +8,8 @@ Commands
                       to start while the database has not been initialized.
 ``version``           Print the version.
 ``owner-token-path``  Print where the owner token file lives (never the token).
+``mcp``               Run the native stdio MCP server, a thin bridge to a
+                      running HTTP service (``python -m jarvismind mcp``).
 
 Startup of the web application never creates or migrates a database; only the
 explicit ``init-db`` command does.
@@ -73,13 +75,68 @@ def _serve(settings: Settings) -> int:
     return 0
 
 
+def _run_mcp(args: argparse.Namespace) -> int:
+    """Start the stdio MCP server without touching settings or the database."""
+    from .mcp.config import MCPConfig, MCPConfigurationError
+    from .mcp.redaction import redact
+    from .mcp.server import run_stdio
+
+    try:
+        config = MCPConfig.from_values(
+            url=args.url,
+            token=args.token,
+            token_file=args.token_file,
+            space=args.space,
+            timeout=args.timeout,
+        )
+    except MCPConfigurationError as exc:
+        print(f"jarvismind-mcp: {redact(str(exc))}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # defensive: never print a traceback into stdio
+        print(
+            f"jarvismind-mcp: configuration error: {redact(str(exc))}",
+            file=sys.stderr,
+        )
+        return 2
+    return run_stdio(config)
+
+
 def build_parser() -> argparse.ArgumentParser:
+    from .mcp.config import DEFAULT_BASE_URL
+
     parser = argparse.ArgumentParser(prog="python -m jarvismind")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("init-db", help="create a new empty database (refuses existing ones)")
     sub.add_parser("serve", help="run the HTTP API (default)")
     sub.add_parser("version", help="print the version")
     sub.add_parser("owner-token-path", help="print the owner token file location")
+    mcp = sub.add_parser("mcp", help="run the native stdio MCP server")
+    mcp.add_argument(
+        "--url",
+        default=None,
+        help=f"JarvisMind base URL (env JARVISMIND_URL; default {DEFAULT_BASE_URL})",
+    )
+    mcp.add_argument(
+        "--token",
+        default=None,
+        help="agent token (env JARVISMIND_AGENT_TOKEN); prefer --token-file",
+    )
+    mcp.add_argument(
+        "--token-file",
+        default=None,
+        dest="token_file",
+        help="file containing the agent token (env JARVISMIND_AGENT_TOKEN_FILE)",
+    )
+    mcp.add_argument(
+        "--space",
+        default=None,
+        help="memory space id sent as X-JarvisMind-Space (env JARVISMIND_SPACE)",
+    )
+    mcp.add_argument(
+        "--timeout",
+        default=None,
+        help="HTTP timeout in seconds (env JARVISMIND_MCP_TIMEOUT; default 5.0)",
+    )
     return parser
 
 
@@ -89,6 +146,10 @@ def main(argv: Optional[Sequence[str]] = None, *, settings: Optional[Settings] =
     if command == "version":
         print(__version__)
         return 0
+    if command == "mcp":
+        # Before any os.umask / load_settings call: stdio mode must never read
+        # configuration or open the database.
+        return _run_mcp(args)
     if command in ("init-db", "serve"):
         # Database files hold memory text, so files created from here on are owner-only.
         # On Windows this has no effect; ACLs apply there instead.
