@@ -232,16 +232,23 @@ export class JarvisMindHttp {
   }
 
   /**
-   * List the agent's readable active memories.
+   * List the agent's readable active memories, newest first.
    *
    * The core anchor needs the user's most defining memories, not matches for a
    * query, so it reads the documented list endpoint and ranks the result
-   * locally. `page_size` is capped at 100 by the server.
+   * locally. `page_size` is capped at 100 by the server. `memoryType` narrows
+   * the window to one type, so a defining memory is not pushed out by newer
+   * memories of other types.
    */
-  async listMemories(limit: number, signal?: AbortSignal): Promise<AnchorMemory[]> {
+  async listMemories(
+    limit: number,
+    options: { memoryType?: string; signal?: AbortSignal } = {},
+  ): Promise<AnchorMemory[]> {
+    const query: Record<string, string | number> = { status: 'ACTIVE', page: 1, page_size: limit }
+    if (options.memoryType !== undefined) query.memory_type = options.memoryType
     const envelope = await this.request<{ data: AnchorMemory[] }>('GET', '/api/v1/agent/memories', {
-      query: { status: 'ACTIVE', page: 1, page_size: limit },
-      ...(signal === undefined ? {} : { signal }),
+      query,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
     return Array.isArray(envelope.data) ? envelope.data : []
   }

@@ -213,11 +213,11 @@ test('ranking does not mutate the caller array', () => {
 function anchorCacheWith(responses, options = {}) {
   let calls = 0
   const http = {
-    async listMemories() {
+    async listMemories(_limit, options = {}) {
       calls += 1
       const next = responses[Math.min(calls - 1, responses.length - 1)]
       if (next instanceof Error) throw next
-      return next
+      return next.filter((row) => options.memoryType === undefined || row.memory_type === options.memoryType)
     },
   }
   const cache = new CoreAnchorCache(http, { ...config, ...options }, silentLogger, {
@@ -234,26 +234,75 @@ test('the anchor read is cached for 30 s and shared by every step', async () => 
   const second = cache.items()
   assert.equal(first, second, 'concurrent reads must share one promise')
   assert.equal((await first).length, 1)
-  assert.equal(calls(), 1)
+  // One read may issue several typed requests; count what a single read costs.
+  const perRead = calls()
+  assert.ok(perRead >= 1)
 
   // Still warm: no new request.
   clock += CORE_ANCHOR_CACHE_TTL_MS - 1
   await cache.items()
-  assert.equal(calls(), 1)
+  assert.equal(calls(), perRead)
 
-  // Expired: exactly one new request.
+  // Expired: exactly one more read.
   clock += 2
   await cache.items()
-  assert.equal(calls(), 2)
+  assert.equal(calls(), perRead * 2)
 })
 
 test('clearing the cache forces a fresh read', async () => {
   const { cache, calls } = anchorCacheWith([[memory('用户喜欢年糕')]])
   await cache.items()
-  assert.equal(calls(), 1)
+  const perRead = calls()
   cache.clear()
   await cache.items()
-  assert.equal(calls(), 2)
+  assert.equal(calls(), perRead * 2)
+})
+
+/**
+ * A fake that behaves like the server: newest first, an optional memory_type
+ * filter, and the 100-row page cap. Every request is recorded.
+ */
+function serverWith(rows) {
+  const requests = []
+  return {
+    requests,
+    async listMemories(limit, options = {}) {
+      requests.push({ limit, memoryType: options.memoryType })
+      return rows
+        .filter((row) => options.memoryType === undefined || row.memory_type === options.memoryType)
+        .slice(0, Math.min(limit, 100))
+    },
+  }
+}
+
+test('core memories older than the newest 100 still reach the anchor', async () => {
+  // Newest first: 3 scratch notes, 115 recent facts, then the two oldest,
+  // defining PROFILE memories sit at positions 118 and 119, beyond the window.
+  const rows = [
+    ...Array.from({ length: 3 }, (_, i) => memory(`scratch ${i}`, 'WORKING', 0.9, `w${i}`)),
+    ...Array.from({ length: 115 }, (_, i) => memory(`近况 ${i}`, 'SEMANTIC', 0.9, `s${i}`)),
+    memory('用户希望被称呼为年糕', 'PROFILE', 0.95, 'core-1'),
+    memory('用户约定先确认再行动', 'PROFILE', 0.8, 'core-2'),
+  ]
+  assert.equal(rows.length, 120)
+  const server = serverWith(rows)
+  const anchor = await new CoreAnchorCache(server, config, silentLogger).items()
+  const ids = anchor.map((item) => item.id)
+
+  assert.ok(ids.includes('core-1'), 'the oldest profile must not sink out of the anchor')
+  assert.ok(ids.includes('core-2'), 'the second profile must not sink out of the anchor')
+  assert.equal(ids[0], 'core-1')
+  assert.ok(!ids.some((id) => id.startsWith('w')), 'scratch state never enters the anchor')
+  assert.deepEqual(server.requests[0], { limit: 100, memoryType: 'PROFILE' })
+  assert.ok(!server.requests.some((request) => request.memoryType === 'WORKING'))
+})
+
+test('other types are requested only while the anchor still has room', async () => {
+  const rows = Array.from({ length: 6 }, (_, i) => memory(`约定 ${i}`, 'PROFILE', 0.5, `p${i}`))
+  const server = serverWith(rows)
+  const anchor = await new CoreAnchorCache(server, config, silentLogger).items()
+  assert.equal(anchor.length, 6)
+  assert.equal(server.requests.length, 1)
 })
 
 test('a disabled anchor performs no request', async () => {

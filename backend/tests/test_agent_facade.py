@@ -230,3 +230,15 @@ def test_agent_search_withholds_sensitive_text(client, manager):
     response = client.get("/api/v1/agent/search", params={"q": "Rust"}, headers=headers)
     assert response.status_code == 200, response.text
     assert "吃药" not in response.text
+
+
+def test_agent_list_can_be_narrowed_to_one_memory_type(client, manager):
+    _store(manager, "我的名字叫林晓明", "PROFILE")
+    _store(manager, "我最近在读一本关于园艺的书", "SEMANTIC")
+    _agent, headers = _agent_with_token(client, permissions=["read", "search", "context"])
+    narrowed = client.get("/api/v1/agent/memories", params={"memory_type": "PROFILE"}, headers=headers)
+    assert narrowed.status_code == 200, narrowed.text
+    types = {item["memory_type"] for item in narrowed.json()["data"]}
+    assert types == {"PROFILE"}
+    unknown = client.get("/api/v1/agent/memories", params={"memory_type": "NOT_A_TYPE"}, headers=headers)
+    assert unknown.status_code == 422

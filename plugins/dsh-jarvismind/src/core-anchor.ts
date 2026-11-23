@@ -24,6 +24,13 @@ const UNKNOWN_TYPE_PRIORITY = 5
 /** Transient scratch state. Never part of a durable anchor. */
 const EXCLUDED_TYPES = new Set(['WORKING'])
 
+/**
+ * Types fetched after PROFILE, in priority order, only while the anchor still has
+ * room. Each has its own query so no type can crowd another out of the window.
+ * WORKING is absent on purpose and is never requested.
+ */
+const SUPPLEMENT_TYPES = ['SEMANTIC', 'EPISODIC', 'REFLECTION', 'PROJECT'] as const
+
 function importanceOf(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
@@ -106,8 +113,17 @@ export class CoreAnchorCache {
 
   private async read(): Promise<AnchorMemory[]> {
     try {
-      const rows = await this.http.listMemories(CORE_ANCHOR_SCAN_LIMIT)
-      return rankAnchorMemories(rows, this.config.coreAnchorLimit)
+      const limit = this.config.coreAnchorLimit
+      // PROFILE first, on its own query: a defining memory must not fall out of the
+      // newest-100 window just because many newer memories of other types exist.
+      const collected: AnchorMemory[] = [
+        ...(await this.http.listMemories(CORE_ANCHOR_SCAN_LIMIT, { memoryType: 'PROFILE' })),
+      ]
+      for (const type of SUPPLEMENT_TYPES) {
+        if (rankAnchorMemories(collected, limit).length >= limit) break
+        collected.push(...(await this.http.listMemories(CORE_ANCHOR_SCAN_LIMIT, { memoryType: type })))
+      }
+      return rankAnchorMemories(collected, limit)
     } catch (error) {
       // Fail open. Log only the stable code: a server-supplied error message is
       // untrusted and this is the most sensitive read the plugin performs, so

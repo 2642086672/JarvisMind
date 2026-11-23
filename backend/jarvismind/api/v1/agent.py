@@ -24,7 +24,7 @@ from ...control.principal import Principal
 from ...control.sensitivity import is_protected, record_is_protected
 from ...core.errors import NotFoundError
 from ...schemas.extraction import ExtractRequest
-from ...schemas.memory import record_to_response
+from ...schemas.memory import MemoryType, record_to_response
 from ...schemas.modification import ModificationRequestCreate
 from ...services.forget_service import AGENT_FACADE_ORIGIN, AGENT_REQUESTER_PREFIX
 from ..auth import principal_auth, require_write_space
@@ -257,12 +257,14 @@ def context(
 def list_memories(
     request: Request,
     status: str = Query(default="ACTIVE", pattern="^(ACTIVE|ARCHIVED)$"),
+    memory_type: Optional[MemoryType] = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     container: Container = Depends(get_container),
 ) -> dict:
     principal: Principal = request.state.principal
     records, total = container.memory_service.list(
+        memory_type=memory_type.value if memory_type is not None else None,
         status=status,
         page=page,
         page_size=page_size,

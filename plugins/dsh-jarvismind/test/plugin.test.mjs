@@ -132,12 +132,12 @@ async function startServer() {
       if (url === '/api/v1/agent/context') {
         send(200, { data: { context: CONTEXT_BLOCK, citations: [], retrieval_version: 'test' } })
       } else if (url.startsWith('/api/v1/agent/memories?')) {
-        send(200, {
-          data: [
-            { id: 'mem_anchor', content: '用户希望被称呼为「年糕」', memory_type: 'PROFILE', importance: 0.95 },
-            { id: 'mem_dup', content: '用户喜欢年糕', memory_type: 'PREFERENCE', importance: 0.8 },
-          ],
-        })
+        const type = new URL(url, 'http://127.0.0.1').searchParams.get('memory_type')
+        const rows = [
+          { id: 'mem_anchor', content: '用户希望被称呼为「年糕」', memory_type: 'PROFILE', importance: 0.95 },
+          { id: 'mem_dup', content: '用户喜欢年糕', memory_type: 'PREFERENCE', importance: 0.8 },
+        ]
+        send(200, { data: rows.filter((row) => type === null || row.memory_type === type) })
       } else if (url.startsWith('/api/v1/agent/search')) {
         send(200, {
           data: [{ memory_id: 'mem_1', content: '用户喜欢年糕', memory_type: 'preference', importance: 0.9 }],
@@ -439,12 +439,14 @@ test('unloading the plugin clears the anchor cache and tears down cleanly', asyn
 
     const assemble = agent.listeners.get('system-prompt/assemble')?.[0]
     const assembly = { sections: [] }
-    await assemble(assembly, { agent }, async () => assembly)
-    await assemble(assembly, { agent }, async () => assembly)
-
     const anchorReads = () => server.requests.filter((request) => request.url.startsWith('/api/v1/agent/memories')).length
-    // One read serves both assemblies inside the 30 s window.
-    assert.equal(anchorReads(), 1)
+
+    await assemble(assembly, { agent }, async () => assembly)
+    // One read may issue several typed requests; the second assembly must add none.
+    const perRead = anchorReads()
+    assert.ok(perRead >= 1)
+    await assemble(assembly, { agent }, async () => assembly)
+    assert.equal(anchorReads(), perRead)
 
     // Tear the plugin down the way Cordis does.
     for (const cleanup of ctx.cleanups) cleanup()
@@ -465,7 +467,7 @@ test('unloading the plugin clears the anchor cache and tears down cleanly', asyn
     })
     const secondAssemble = fresh.listeners.get('system-prompt/assemble')[0]
     await secondAssemble(assembly, { agent: fresh }, async () => assembly)
-    assert.equal(anchorReads(), 2)
+    assert.equal(anchorReads(), perRead * 2)
   } finally {
     delete process.env.JM_PLUGIN_TEST_TOKEN
     await server.close()
